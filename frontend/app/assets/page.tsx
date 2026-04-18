@@ -1,8 +1,109 @@
+"use client";
+
+import { useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import Link from "next/link";
 
+const ASSETS_DATA = [
+  {
+    symbol: "USDC",
+    name: "USDC",
+    network: "Base",
+    networkColor: "bg-[#0052ff]",
+    iconColor: "text-[#2775ca]",
+    iconBg: "bg-[#2775ca]/20 border-[#2775ca]/30",
+    balance: "5,000.00",
+    value: "$5,000.00",
+    allocatedValue: "4,000.00",
+    strategy: "Yield Farm Alpha",
+    percentage: 48.8,
+  },
+  {
+    symbol: "WETH",
+    name: "WETH",
+    network: "Ethereum",
+    networkColor: "bg-[#627eea]",
+    iconColor: "text-[#627eea]",
+    iconBg: "bg-[#627eea]/20 border-[#627eea]/30",
+    balance: "1.50",
+    value: "$3,450.00",
+    allocatedValue: "1.00",
+    strategy: "ETH Delta Neutral",
+    percentage: 33.6,
+  },
+  {
+    symbol: "stETH",
+    name: "stETH",
+    network: "Ethereum",
+    networkColor: "bg-[#627eea]",
+    iconColor: "text-[#00a3ff]",
+    iconBg: "bg-[#00a3ff]/20 border-[#00a3ff]/30",
+    balance: "0.45",
+    value: "$1,035.00",
+    allocatedValue: null,
+    strategy: "Idle",
+    percentage: 10.1,
+  },
+  {
+    symbol: "aUSDC",
+    name: "aUSDC",
+    network: "Base",
+    networkColor: "bg-[#0052ff]",
+    iconColor: "text-[#b6509e]",
+    iconBg: "bg-[#b6509e]/20 border-[#b6509e]/30",
+    balance: "500.00",
+    value: "$500.00",
+    allocatedValue: "500.00",
+    strategy: "Aave Lending",
+    percentage: 4.8,
+  },
+  {
+    symbol: "UNI-LP",
+    name: "UNI-V3-LP",
+    network: "Base",
+    networkColor: "bg-[#0052ff]",
+    iconColor: "text-[#ff007a]",
+    iconBg: "bg-[#ff007a]/20 border-[#ff007a]/30",
+    balance: "1.00",
+    value: "$262.38",
+    allocatedValue: "1.00",
+    strategy: "Liq Provisioning",
+    percentage: 2.5,
+  }
+];
+
 export default function AssetsPage() {
+  const [assets] = useState(ASSETS_DATA);
+
+  const handleExportCSV = () => {
+    const headers = ["Asset Name", "Network", "Balance", "Value", "Allocated", "Strategy", "Percentage"];
+    const rows = assets.map(a => [
+      a.name, 
+      a.network, 
+      a.balance.replace(/,/g, ''), 
+      a.value.replace(/[$,]/g, ''), 
+      a.allocatedValue ? a.allocatedValue.replace(/,/g, '') : "0", 
+      a.strategy, 
+      `${a.percentage}%`
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "assets_export.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="text-on-surface antialiased min-h-screen flex bg-[#0A0B0D]">
       <Sidebar active="assets" variant="assets-view" />
@@ -56,7 +157,12 @@ export default function AssetsPage() {
           <div className="bg-[#111214] rounded-[16px] border border-white/5 overflow-hidden">
             <div className="p-6 border-b border-white/5 flex justify-between items-center">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">Asset Breakdown</h3>
-              <button className="text-xs font-medium text-primary hover:text-primary-fixed transition-colors">Export CSV</button>
+              <button 
+                onClick={handleExportCSV}
+                className="text-xs font-medium text-primary hover:text-primary-fixed transition-colors active:scale-95"
+              >
+                Export CSV
+              </button>
             </div>
             <div className="w-full overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -70,170 +176,45 @@ export default function AssetsPage() {
                   </tr>
                 </thead>
                 <tbody className="text-sm text-on-surface divide-y divide-white/5">
-                  <tr className="hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#2775ca]/20 flex items-center justify-center border border-[#2775ca]/30">
-                          <span className="text-[#2775ca] text-[10px] font-bold">USDC</span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-white">USDC</div>
-                          <div className="text-[11px] text-secondary flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0052ff]"></span> Base
+                  {assets.map((asset) => (
+                    <tr key={asset.symbol} className="hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${asset.iconBg}`}>
+                            <span className={`${asset.iconColor} text-[10px] font-bold`}>{asset.symbol}</span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-white">{asset.name}</div>
+                            <div className="text-[11px] text-secondary flex items-center gap-1 mt-0.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${asset.networkColor}`}></span> {asset.network}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums font-medium">5,000.00</td>
-                    <td className="px-5 py-4 text-right tabular-nums text-white font-medium">$5,000.00</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 tabular-nums">4,000.00</span>
-                        <Link className="text-[11px] text-secondary hover:text-white transition-colors flex items-center" href="#">
-                          Yield Farm Alpha <span className="material-symbols-outlined text-[14px] ml-0.5">open_in_new</span>
-                        </Link>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div className="bg-primary h-full" style={{ width: "48.8%" }}></div>
-                        </div>
-                        <span className="text-xs tabular-nums text-secondary w-8 text-right">48.8%</span>
-                      </div>
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#627eea]/20 flex items-center justify-center border border-[#627eea]/30">
-                          <span className="text-[#627eea] text-[10px] font-bold">WETH</span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-white">WETH</div>
-                          <div className="text-[11px] text-secondary flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#627eea]"></span> Ethereum
+                      </td>
+                      <td className="px-5 py-4 text-right tabular-nums font-medium">{asset.balance}</td>
+                      <td className="px-5 py-4 text-right tabular-nums text-white font-medium">{asset.value}</td>
+                      <td className="px-5 py-4">
+                        {asset.allocatedValue ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 tabular-nums">{asset.allocatedValue}</span>
+                            <Link className="text-[11px] text-secondary hover:text-white transition-colors flex items-center" href="#">
+                              {asset.strategy} <span className="material-symbols-outlined text-[14px] ml-0.5">open_in_new</span>
+                            </Link>
                           </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums font-medium">1.50</td>
-                    <td className="px-5 py-4 text-right tabular-nums text-white font-medium">$3,450.00</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 tabular-nums">1.00</span>
-                        <Link className="text-[11px] text-secondary hover:text-white transition-colors flex items-center" href="#">
-                          ETH Delta Neutral <span className="material-symbols-outlined text-[14px] ml-0.5">open_in_new</span>
-                        </Link>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div className="bg-primary h-full" style={{ width: "33.6%" }}></div>
-                        </div>
-                        <span className="text-xs tabular-nums text-secondary w-8 text-right">33.6%</span>
-                      </div>
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#00a3ff]/20 flex items-center justify-center border border-[#00a3ff]/30">
-                          <span className="text-[#00a3ff] text-[10px] font-bold">stETH</span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-white">stETH</div>
-                          <div className="text-[11px] text-secondary flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#627eea]"></span> Ethereum
+                        ) : (
+                          <span className="text-xs text-secondary">{asset.strategy}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                            <div className="bg-primary h-full" style={{ width: `${asset.percentage}%` }}></div>
                           </div>
+                          <span className="text-xs tabular-nums text-secondary w-8 text-right">{asset.percentage}%</span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums font-medium">0.45</td>
-                    <td className="px-5 py-4 text-right tabular-nums text-white font-medium">$1,035.00</td>
-                    <td className="px-5 py-4">
-                      <span className="text-xs text-secondary">Idle</span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div className="bg-primary h-full" style={{ width: "10.1%" }}></div>
-                        </div>
-                        <span className="text-xs tabular-nums text-secondary w-8 text-right">10.1%</span>
-                      </div>
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#b6509e]/20 flex items-center justify-center border border-[#b6509e]/30">
-                          <span className="text-[#b6509e] text-[10px] font-bold">aUSDC</span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-white">aUSDC</div>
-                          <div className="text-[11px] text-secondary flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0052ff]"></span> Base
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums font-medium">500.00</td>
-                    <td className="px-5 py-4 text-right tabular-nums text-white font-medium">$500.00</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 tabular-nums">500.00</span>
-                        <Link className="text-[11px] text-secondary hover:text-white transition-colors flex items-center" href="#">
-                          Aave Lending <span className="material-symbols-outlined text-[14px] ml-0.5">open_in_new</span>
-                        </Link>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div className="bg-primary h-full" style={{ width: "4.8%" }}></div>
-                        </div>
-                        <span className="text-xs tabular-nums text-secondary w-8 text-right">4.8%</span>
-                      </div>
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-white/5 transition-colors group border-b border-white/5 last:border-0">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#ff007a]/20 flex items-center justify-center border border-[#ff007a]/30">
-                          <span className="text-[#ff007a] text-[10px] font-bold">UNI-LP</span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-white">UNI-V3-LP</div>
-                          <div className="text-[11px] text-secondary flex items-center gap-1 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0052ff]"></span> Base
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right tabular-nums font-medium">1.00</td>
-                    <td className="px-5 py-4 text-right tabular-nums text-white font-medium">$262.38</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 tabular-nums">1.00</span>
-                        <Link className="text-[11px] text-secondary hover:text-white transition-colors flex items-center" href="#">
-                          Liq Provisioning <span className="material-symbols-outlined text-[14px] ml-0.5">open_in_new</span>
-                        </Link>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div className="bg-primary h-full" style={{ width: "2.5%" }}></div>
-                        </div>
-                        <span className="text-xs tabular-nums text-secondary w-8 text-right">2.5%</span>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

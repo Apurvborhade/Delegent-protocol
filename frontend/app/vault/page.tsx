@@ -1,15 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 
 export default function VaultPage() {
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("1000.00");
-  const [balance] = useState(10247.38);
+  const [balance, setBalance] = useState(10247.38);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedToken, setSelectedToken] = useState({ symbol: "USDC", color: "bg-primary/20", textClass: "text-primary" });
+  
+  const tokens = [
+    { symbol: "USDC", color: "bg-primary/20", textClass: "text-primary" },
+    { symbol: "ETH", color: "bg-[#627eea]/20", textClass: "text-[#627eea]" },
+    { symbol: "DAI", color: "bg-[#f4b731]/20", textClass: "text-[#f4b731]" },
+  ];
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   
   const [pendingApprovals, setPendingApprovals] = useState([
     {
@@ -46,8 +67,13 @@ export default function VaultPage() {
       return;
     }
 
-    console.log(`Executing ${mode} for amount: ${numAmount}`);
-    setSuccess(`Successfully ${mode === "deposit" ? "deposited" : "withdrew"} $${numAmount.toFixed(2)}`);
+    if (mode === "deposit") {
+      setBalance((prev) => prev + numAmount);
+      setSuccess(`Successfully deposited $${numAmount.toFixed(2)} ${selectedToken.symbol}`);
+    } else {
+      setBalance((prev) => prev - numAmount);
+      setSuccess(`Successfully withdrew $${numAmount.toFixed(2)} ${selectedToken.symbol}`);
+    }
   };
 
   const handleApprove = (id: number) => {
@@ -116,11 +142,38 @@ export default function VaultPage() {
               </div>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
-                  <button className="flex items-center gap-2 bg-surface-container-low border border-[rgba(67,70,84,0.15)] rounded-lg px-4 py-3 hover:bg-surface-container transition-colors">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">USDC</div>
-                    <span className="font-medium text-sm">USDC</span>
-                    <span className="material-symbols-outlined text-[16px] text-secondary">expand_more</span>
-                  </button>
+                  <div className="relative" ref={dropdownRef}>
+                    <button 
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="flex items-center gap-2 bg-surface-container-low border border-[rgba(67,70,84,0.15)] rounded-lg px-4 py-3 hover:bg-surface-container transition-colors active:scale-95"
+                    >
+                      <div className={`w-6 h-6 rounded-full ${selectedToken.color} flex items-center justify-center text-[10px] font-bold ${selectedToken.textClass}`}>
+                        {selectedToken.symbol}
+                      </div>
+                      <span className="font-medium text-sm w-8 text-left">{selectedToken.symbol}</span>
+                      <span className="material-symbols-outlined text-[16px] text-secondary">expand_more</span>
+                    </button>
+
+                    {isDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-full min-w-[120px] bg-surface-container-highest border border-[rgba(67,70,84,0.15)] rounded-lg overflow-hidden z-50 shadow-lg">
+                        {tokens.map((token) => (
+                          <button
+                            key={token.symbol}
+                            onClick={() => {
+                              setSelectedToken(token);
+                              setIsDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surface-container transition-colors text-left"
+                          >
+                            <div className={`w-6 h-6 rounded-full ${token.color} flex items-center justify-center text-[10px] font-bold ${token.textClass}`}>
+                              {token.symbol}
+                            </div>
+                            <span className="font-medium text-sm text-white">{token.symbol}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 relative">
                     <input
                       value={amount}
