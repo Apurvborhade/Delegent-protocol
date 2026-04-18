@@ -62,6 +62,7 @@ const erc721TransferAbi = parseAbi([
 const erc20Abi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
 ]);
 
 const aavePoolAbi = parseAbi([
@@ -602,6 +603,19 @@ export async function getErc20Balance(tokenAddress: Address, ownerAddress: Addre
     });
   } catch {
     return 0n;
+  }
+}
+
+export async function getErc20Decimals(tokenAddress: Address): Promise<number> {
+  try {
+    return await publicClient.readContract({
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: "decimals",
+    }) as number;
+  } catch {
+    // USDC default on Base Sepolia
+    return 6;
   }
 }
 

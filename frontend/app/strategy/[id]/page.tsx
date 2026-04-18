@@ -6,6 +6,11 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@/context/WalletContext";
 import { api, type ProposalResponse } from "@/lib/api";
+import { resolveVaultAddress } from "../../../lib/vault";
+
+// Base Sepolia USDC — used to query the ERC20 vault balance with proper decimals
+const USDC_ADDRESS =
+  process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f";
 
 function toRiskLabel(riskLevel: ProposalResponse["riskLevel"]) {
   if (riskLevel === "high") {
@@ -15,6 +20,46 @@ function toRiskLabel(riskLevel: ProposalResponse["riskLevel"]) {
     return "Medium Risk";
   }
   return "Low Risk";
+}
+
+function toStatusLabel(status: ProposalResponse["status"]) {
+  if (status === "executed") return "Executed";
+  if (status === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function toStatusClass(status: ProposalResponse["status"]) {
+  if (status === "executed") return "border-emerald-400/30 text-emerald-300 bg-emerald-400/10";
+  if (status === "rejected") return "border-error/30 text-error bg-error/10";
+  return "border-tertiary/30 text-tertiary bg-tertiary/10";
+}
+
+function toDisplayUri(uri?: string) {
+  if (!uri) return "-";
+  if (uri.length <= 42) return uri;
+  return `${uri.slice(0, 22)}...${uri.slice(-14)}`;
+}
+
+/**
+ * Parse a balance string that may be raw wei ("101000000000000000")
+ * or already human-readable ("0.101"). Uses BigInt to avoid overflow.
+ */
+function parseContractBalance(raw: string | undefined | null, decimals: number): number {
+  if (!raw || raw === "0") return 0;
+  if (raw.includes(".")) {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+  try {
+    const big = BigInt(raw);
+    const divisor = BigInt(10 ** decimals);
+    const whole = big / divisor;
+    const fraction = big % divisor;
+    const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+    return parseFloat(fractionStr ? `${whole}.${fractionStr}` : whole.toString());
+  } catch {
+    return 0;
+  }
 }
 
 function toRiskScore(riskLevel: ProposalResponse["riskLevel"]) {
@@ -41,7 +86,10 @@ export default function StrategyDetailPage() {
 
   const proposalsQuery = useQuery({
     queryKey: ["strategy-detail-proposals", address],
-    queryFn: () => api.getProposals(address as string),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress ? api.getProposals(vaultAddress) : { proposals: [] };
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
@@ -58,13 +106,6 @@ export default function StrategyDetailPage() {
     staleTime: 30_000,
   });
 
-  const reputationQuery = useQuery({
-    queryKey: ["strategy-agent-reputation", strategy?.proposerAddress],
-    queryFn: () => api.getReputation(strategy?.proposerAddress as string),
-    enabled: !!strategy?.proposerAddress,
-    staleTime: 30_000,
-  });
-
   const feedbackSummaryQuery = useQuery({
     queryKey: ["strategy-agent-feedback", identityQuery.data?.registryAgentId],
     queryFn: () => api.getFeedbackSummary(identityQuery.data?.registryAgentId as string),
@@ -73,8 +114,18 @@ export default function StrategyDetailPage() {
   });
 
   const vaultBalanceQuery = useQuery({
-    queryKey: ["strategy-vault-balance", address],
-    queryFn: () => api.getVaultBalance(address as string),
+    queryKey: ["strategy-vault-balance", address, USDC_ADDRESS],
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress
+        ? api.getVaultBalance(vaultAddress, USDC_ADDRESS)
+        : ({ vault: address as string, balance: "0", assetAddress: USDC_ADDRESS } as {
+            vault: string;
+            balance: string;
+            assetAddress: string;
+            decimals?: number;
+          });
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
@@ -98,11 +149,13 @@ export default function StrategyDetailPage() {
   const apy = strategy.expectedApyBps / 100;
   const riskLabel = toRiskLabel(strategy.riskLevel);
   const riskScore = toRiskScore(strategy.riskLevel);
-  const agentRep = Number.parseFloat(reputationQuery.data?.score ?? "0");
+  const agentRep = strategy.score ?? 0;
   const confidencePct = (strategy.marketSnapshot.confidence || 0) * 100;
   const utilizationPct = strategy.marketSnapshot.utilizationBps / 100;
   const supplyApr = strategy.marketSnapshot.supplyAprBps / 100;
-  const availableBalance = Number.parseFloat(vaultBalanceQuery.data?.balance ?? "0");
+  // decimals: 6 if ERC20 asset (USDC), 18 if native WETH from VaultFactory
+  const balanceDecimals = vaultBalanceQuery.data?.decimals ?? (vaultBalanceQuery.data?.assetAddress ? 6 : 18);
+  const availableBalance = parseContractBalance(vaultBalanceQuery.data?.balance, balanceDecimals);
 
   const executionSteps = [
     {
@@ -195,6 +248,54 @@ export default function StrategyDetailPage() {
             </span>
           </div>
         </section>
+
+        <div className="bg-surface rounded-lg p-6 flex flex-col gap-4 border border-outline-variant/15 shadow-sm">
+          <h2 className="text-sm font-semibold text-on-surface uppercase tracking-wider font-headline">
+            Protocol Plan
+          </h2>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Status</div>
+              <span
+                className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${toStatusClass(strategy.status)}`}
+              >
+                {toStatusLabel(strategy.status)}
+              </span>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Agent URI</div>
+              <div className="text-on-surface font-mono text-xs break-all">
+                {toDisplayUri(identityQuery.data?.agentUri)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Protocol</div>
+              <div className="text-on-surface">{strategy.protocolPlan.protocol}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Chain</div>
+              <div className="text-on-surface">{strategy.protocolPlan.chain}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Amount Mode</div>
+              <div className="text-on-surface">{strategy.protocolPlan.amountMode}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Asset</div>
+              <div className="text-on-surface">
+                {strategy.protocolPlan.assetSymbol} <span className="font-mono text-secondary">{strategy.protocolPlan.assetAddress}</span>
+              </div>
+            </div>
+            <div className="col-span-2">
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Pool Address</div>
+              <div className="text-on-surface font-mono break-all">{strategy.protocolPlan.poolAddress}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-secondary mb-1">Referral Code</div>
+              <div className="text-on-surface tabular-nums">{strategy.protocolPlan.referralCode}</div>
+            </div>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-7 flex flex-col gap-6">
@@ -424,23 +525,28 @@ export default function StrategyDetailPage() {
               <div className="grid grid-cols-2 gap-4 mt-2 pt-4 border-t border-outline-variant/10">
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] text-secondary uppercase tracking-wider font-label">
-                    Success Rate
+                    Agent Score
                   </span>
                   <span className="text-sm font-semibold text-on-surface tabular-nums">
-                    {feedbackSummaryQuery.data
-                      ? `${Math.min(
-                          (feedbackSummaryQuery.data.positiveFeedback /
-                            Math.max(feedbackSummaryQuery.data.totalFeedback, 1)) *
-                            100,
-                          100,
-                        ).toFixed(1)}%`
-                      : "0.0%"}
+                    {agentRep.toLocaleString("en-US")}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-[11px] text-secondary uppercase tracking-wider font-label">
-                    Active Users
+                  <span className="text-[11px] text-secondary uppercase tracking-wider font-label">Status</span>
+                  <span
+                    className={`inline-flex w-fit rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${toStatusClass(strategy.status)}`}
+                  >
+                    {toStatusLabel(strategy.status)}
                   </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] text-secondary uppercase tracking-wider font-label">Agent URI</span>
+                  <span className="text-xs text-on-surface tabular-nums font-mono break-all">
+                    {toDisplayUri(identityQuery.data?.agentUri)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] text-secondary uppercase tracking-wider font-label">Executions</span>
                   <span className="text-sm font-semibold text-on-surface tabular-nums">
                     {feedbackSummaryQuery.data?.totalFeedback ?? 0}
                   </span>

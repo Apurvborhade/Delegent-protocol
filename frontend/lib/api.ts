@@ -21,6 +21,7 @@ export interface VaultBalanceResponse {
   vault: string;
   balance: string;
   assetAddress?: string;
+  decimals?: number;
 }
 
 export interface VaultSignalResponse {

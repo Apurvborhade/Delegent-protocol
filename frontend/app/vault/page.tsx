@@ -5,7 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { useWallet } from "@/context/WalletContext";
-import { api, type ProposalResponse, type VaultSignalResponse } from "@/lib/api";
+import { api, type ProposalResponse, type VaultBalanceResponse, type VaultSignalResponse } from "@/lib/api";
+import { resolveVaultAddress } from "../../lib/vault";
+
+// Base Sepolia USDC — used to query the ERC20 vault balance with proper decimals
+const USDC_ADDRESS =
+  process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f";
 
 type PendingApproval = {
   id: string;
@@ -34,6 +39,50 @@ function toNumber(value: string | number | undefined | null) {
   }
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseTokenAmount(raw: string | undefined | null, decimals: number) {
+  if (!raw || raw === "0") return 0;
+  if (raw.includes(".")) {
+    return toNumber(raw);
+  }
+
+  try {
+    const value = BigInt(raw);
+    const divisor = BigInt(10) ** BigInt(decimals);
+    const whole = value / divisor;
+    const fraction = value % divisor;
+    const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+    return Number.parseFloat(fractionStr ? `${whole}.${fractionStr}` : whole.toString());
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Safely parse a balance that may be either:
+ *  - A raw on-chain atomic integer string (e.g. "101000000000000000" for 0.101 WETH)
+ *  - An already human-readable decimal string (e.g. "0.101")
+ * Uses BigInt arithmetic to avoid floating-point overflow on large wei values.
+ */
+function parseContractBalance(raw: string | undefined | null, decimals: number): number {
+  if (!raw || raw === "0") return 0;
+  // Already human-readable — has a decimal point
+  if (raw.includes(".")) {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+  // Raw integer string — divide by 10^decimals using BigInt to avoid overflow
+  try {
+    const big = BigInt(raw);
+    const divisor = BigInt(10 ** decimals);
+    const whole = big / divisor;
+    const fraction = big % divisor;
+    const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+    return parseFloat(fractionStr ? `${whole}.${fractionStr}` : whole.toString());
+  } catch {
+    return 0;
+  }
 }
 
 function formatCurrency(value: number) {
@@ -102,7 +151,7 @@ function buildTransactionRows(signals: VaultSignalResponse[] | undefined): Trans
   return [...signals]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .map((signal) => {
-      const amount = toNumber(signal.fundedAmount);
+      const amount = parseTokenAmount(signal.fundedAmount, signal.assetSymbol === "WETH" ? 18 : 6);
       const badge = mapStatusBadge(signal.status);
       return {
         id: signal.id,
@@ -143,22 +192,36 @@ export default function VaultPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const vaultBalanceQuery = useQuery({
-    queryKey: ["vault-balance", address],
-    queryFn: () => api.getVaultBalance(address as string),
+    queryKey: ["vault-balance", address, USDC_ADDRESS],
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress
+        ? api.getVaultBalance(vaultAddress, USDC_ADDRESS)
+        : ({ vault: address as string, balance: "0", assetAddress: USDC_ADDRESS } as VaultBalanceResponse);
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
 
   const vaultSignalsQuery = useQuery({
     queryKey: ["vault-signals", address],
-    queryFn: () => api.getVaultSignals({ ownerAddress: address as string }),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return api.getVaultSignals({
+        ownerAddress: address as string,
+        vaultAddress: vaultAddress ?? undefined,
+      });
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
 
   const proposalsQuery = useQuery({
     queryKey: ["proposals", address],
-    queryFn: () => api.getProposals(address as string),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress ? api.getProposals(vaultAddress) : { proposals: [] };
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
@@ -179,10 +242,12 @@ export default function VaultPage() {
     }
     return vaultSignalsQuery.data
       .filter((signal) => signal.status === "ready-for-strategy")
-      .reduce((sum, signal) => sum + toNumber(signal.fundedAmount), 0);
+      .reduce((sum, signal) => sum + parseTokenAmount(signal.fundedAmount, signal.assetSymbol === "WETH" ? 18 : 6), 0);
   }, [vaultSignalsQuery.data]);
 
-  const baseBalance = toNumber(vaultBalanceQuery.data?.balance);
+  // decimals: 6 for ERC20 (USDC), 18 for native WETH from VaultFactory
+  const balanceDecimals = vaultBalanceQuery.data?.decimals ?? (vaultBalanceQuery.data?.assetAddress ? 6 : 18);
+  const baseBalance = parseContractBalance(vaultBalanceQuery.data?.balance, balanceDecimals);
   const balance = baseBalance + balanceDelta;
 
   const allocatedPercent = balance > 0 ? Math.min((allocated / balance) * 100, 100) : 0;

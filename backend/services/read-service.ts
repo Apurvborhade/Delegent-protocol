@@ -4,6 +4,7 @@ import {
   fetchAgentIdentity,
   fetchAgentMetadata,
   fetchAllFeedback,
+  fetchErc20Decimals,
   fetchFeedbackSummary,
   fetchReputation,
   fetchVaultAssetBalance,
@@ -89,16 +90,33 @@ export async function getVaultBalanceForRequest(vault: string, assetAddress?: st
     /^0x[a-fA-F0-9]{40}$/.test(vault) &&
     /^0x[a-fA-F0-9]{40}$/.test(assetAddress)
   ) {
+    const [rawBalance, decimals] = await Promise.all([
+      fetchVaultAssetBalance(vault as Address, assetAddress as Address),
+      fetchErc20Decimals(assetAddress as Address),
+    ]);
+    const divisor = 10n ** BigInt(decimals);
+    const whole = rawBalance / divisor;
+    const fraction = rawBalance % divisor;
+    const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+    const humanBalance = fractionStr ? `${whole}.${fractionStr}` : whole.toString();
     return {
       vault,
       assetAddress,
-      balance: (await fetchVaultAssetBalance(vault as Address, assetAddress as Address)).toString(),
+      decimals,
+      balance: humanBalance,
     };
   }
 
+  // VaultFactory.getVaultBalance returns native token balance in wei (18 decimals)
+  const rawBalance = await fetchVaultBalance(vault);
+  const divisor = 10n ** 18n;
+  const whole = rawBalance / divisor;
+  const fraction = rawBalance % divisor;
+  const fractionStr = fraction.toString().padStart(18, "0").replace(/0+$/, "");
+  const humanBalance = fractionStr ? `${whole}.${fractionStr}` : whole.toString();
   return {
     vault,
-    balance: (await fetchVaultBalance(vault)).toString(),
+    balance: humanBalance,
   };
 }
 

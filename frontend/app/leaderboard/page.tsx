@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { useWallet } from "@/context/WalletContext";
 import { api, type ProposalResponse } from "@/lib/api";
+import { resolveVaultAddress } from "../../lib/vault";
 
 type Timeframe = "7D" | "30D" | "90D" | "All Time";
 
@@ -50,7 +51,10 @@ export default function LeaderboardPage() {
 
   const proposalsQuery = useQuery({
     queryKey: ["leaderboard-proposals", address],
-    queryFn: () => api.getProposals(address as string),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress ? api.getProposals(vaultAddress) : { proposals: [] };
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import { createAppKit } from "@reown/appkit/react";
-import { mainnet, arbitrum, base } from "@reown/appkit/networks";
+import { mainnet, arbitrum, base, baseSepolia } from "@reown/appkit/networks";
 import { projectId, wagmiAdapter } from "@/config/wagmi";
 
 let initialized = false;
@@ -29,8 +29,8 @@ export function initAppKit() {
     const modal = createAppKit({
       adapters: [wagmiAdapter],
       projectId,
-      networks: [mainnet, arbitrum, base],
-      defaultNetwork: mainnet,
+      networks: [baseSepolia, base, mainnet, arbitrum],
+      defaultNetwork: baseSepolia,
       metadata,
       features: {
         analytics: false,

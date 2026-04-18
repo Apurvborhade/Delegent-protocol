@@ -7,6 +7,7 @@ import { Topbar } from "@/components/layout/topbar";
 import Link from "next/link";
 import { useWallet } from "@/context/WalletContext";
 import { api, type ProposalResponse, type VaultSignalResponse } from "@/lib/api";
+import { resolveVaultAddress } from "../../lib/vault";
 
 type AssetRow = {
   symbol: string;
@@ -45,6 +46,24 @@ function toNumber(value: string | number | null | undefined) {
   }
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseTokenAmount(raw: string | undefined | null, decimals: number) {
+  if (!raw || raw === "0") return 0;
+  if (raw.includes(".")) {
+    return toNumber(raw);
+  }
+
+  try {
+    const value = BigInt(raw);
+    const divisor = BigInt(10) ** BigInt(decimals);
+    const whole = value / divisor;
+    const fraction = value % divisor;
+    const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
+    return Number.parseFloat(fractionStr ? `${whole}.${fractionStr}` : whole.toString());
+  } catch {
+    return 0;
+  }
 }
 
 function formatCurrency(value: number) {
@@ -89,7 +108,7 @@ function buildAssets(
       allocated: 0,
     };
 
-    const amount = toNumber(signal.fundedAmount);
+    const amount = parseTokenAmount(signal.fundedAmount, signal.assetSymbol === "WETH" ? 18 : 6);
     current.total += amount;
     if (signal.status === "ready-for-strategy") {
       current.allocated += amount;
@@ -132,14 +151,23 @@ export default function AssetsPage() {
 
   const signalsQuery = useQuery({
     queryKey: ["asset-signals", address],
-    queryFn: () => api.getVaultSignals({ ownerAddress: address as string }),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return api.getVaultSignals({
+        ownerAddress: address as string,
+        vaultAddress: vaultAddress ?? undefined,
+      });
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
 
   const proposalsQuery = useQuery({
     queryKey: ["asset-proposals", address],
-    queryFn: () => api.getProposals(address as string),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress ? api.getProposals(vaultAddress) : { proposals: [] };
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });

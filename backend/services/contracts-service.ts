@@ -16,6 +16,7 @@ import {
   getContractAddresses,
   getAgentMetadata,
   getErc20Balance,
+  getErc20Decimals,
   getRelayerAddress,
   readAllFeedback,
   registerIdentity,
@@ -128,6 +129,10 @@ export async function fetchVaultBalance(userAddress: string) {
 
 export async function fetchVaultAssetBalance(vaultAddress: Address, assetAddress: Address) {
   return getErc20Balance(assetAddress, vaultAddress);
+}
+
+export async function fetchErc20Decimals(tokenAddress: Address) {
+  return getErc20Decimals(tokenAddress);
 }
 
 export async function ensureVaultExecuter(vaultAddress: Address) {

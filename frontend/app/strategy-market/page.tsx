@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import Link from "next/link";
 import { useWallet } from "@/context/WalletContext";
-import { api, type ProposalResponse } from "@/lib/api";
+import { api, type AgentIdentityResponse, type ProposalResponse } from "@/lib/api";
+import { resolveVaultAddress } from "../../lib/vault";
 
 type StrategyCard = {
   id: string;
@@ -18,8 +19,10 @@ type StrategyCard = {
   apy: number;
   riskScore: number;
   agentRep: number;
+  agentUri?: string;
+  status: ProposalResponse["status"];
   tvl: number;
-  protocols: string[];
+  protocolPlan: ProposalResponse["protocolPlan"];
   isTrending: boolean;
 };
 
@@ -45,7 +48,28 @@ function toRiskScore(riskLevel: ProposalResponse["riskLevel"]) {
   return 2;
 }
 
-function buildStrategies(proposals: ProposalResponse[] | undefined): StrategyCard[] {
+function toStatusLabel(status: ProposalResponse["status"]) {
+  if (status === "executed") return "Executed";
+  if (status === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function toStatusClass(status: ProposalResponse["status"]) {
+  if (status === "executed") return "border-emerald-400/30 text-emerald-300 bg-emerald-400/10";
+  if (status === "rejected") return "border-error/30 text-error bg-error/10";
+  return "border-tertiary/30 text-tertiary bg-tertiary/10";
+}
+
+function toDisplayUri(uri?: string) {
+  if (!uri) return "-";
+  if (uri.length <= 34) return uri;
+  return `${uri.slice(0, 18)}...${uri.slice(-12)}`;
+}
+
+function buildStrategies(
+  proposals: ProposalResponse[] | undefined,
+  identities: Map<string, AgentIdentityResponse>,
+): StrategyCard[] {
   if (!proposals?.length) {
     return [];
   }
@@ -55,14 +79,16 @@ function buildStrategies(proposals: ProposalResponse[] | undefined): StrategyCar
     name: proposal.title,
     riskLevel: toRiskLabel(proposal.riskLevel),
     riskColor: toRiskColor(proposal.riskLevel),
-    agent: proposal.proposerAgentId,
+    agent: identities.get(proposal.proposerAddress.toLowerCase())?.identityDocument?.name ?? proposal.proposerAgentId,
     description: proposal.summary,
     apy: proposal.expectedApyBps / 100,
     riskScore: toRiskScore(proposal.riskLevel),
-    agentRep: Number((proposal.marketSnapshot.confidence * 100).toFixed(1)),
+    agentRep: proposal.score ?? 0,
+    agentUri: identities.get(proposal.proposerAddress.toLowerCase())?.agentUri,
+    status: proposal.status,
     tvl: Number.parseFloat(proposal.calls?.[0]?.value ?? "0"),
-    protocols: [proposal.protocolPlan.protocol],
-    isTrending: proposal.status === "pending",
+    protocolPlan: proposal.protocolPlan,
+    isTrending: proposal.status === "executed",
   }));
 }
 
@@ -74,10 +100,36 @@ export default function StrategyMarketPage() {
 
   const proposalsQuery = useQuery({
     queryKey: ["strategy-market", address],
-    queryFn: () => api.getProposals(address as string),
+    queryFn: async () => {
+      const vaultAddress = await resolveVaultAddress(address as string);
+      return vaultAddress ? api.getProposals(vaultAddress) : { proposals: [] };
+    },
     enabled: isConnected && !!address,
     staleTime: 30_000,
   });
+
+  const identityQueries = useQueries({
+    queries:
+      proposalsQuery.data?.proposals.map((proposal) => ({
+        queryKey: ["strategy-market-agent-identity", proposal.proposerAddress],
+        queryFn: () => api.getAgentIdentity(proposal.proposerAddress),
+        enabled: !!proposal.proposerAddress,
+        staleTime: 30_000,
+      })) ?? [],
+  });
+
+  const identityByAddress = useMemo(() => {
+    const entries = proposalsQuery.data?.proposals.map((proposal, index) => [
+      proposal.proposerAddress.toLowerCase(),
+      identityQueries[index]?.data,
+    ]);
+
+    return new Map(
+      (entries ?? [])
+        .filter((entry): entry is [string, AgentIdentityResponse] => !!entry[1])
+        .map(([addressKey, identity]) => [addressKey, identity]),
+    );
+  }, [identityQueries, proposalsQuery.data?.proposals]);
 
   useEffect(() => {
     if (proposalsQuery.error) {
@@ -86,8 +138,8 @@ export default function StrategyMarketPage() {
   }, [proposalsQuery.error]);
 
   const strategies = useMemo(
-    () => buildStrategies(proposalsQuery.data?.proposals),
-    [proposalsQuery.data?.proposals],
+    () => buildStrategies(proposalsQuery.data?.proposals, identityByAddress),
+    [identityByAddress, proposalsQuery.data?.proposals],
   );
 
   const filteredAndSortedStrategies = useMemo(() => {
@@ -225,40 +277,64 @@ export default function StrategyMarketPage() {
                   </div>
                   <div className="text-[12px] text-secondary mb-4">by {strategy.agent}</div>
                   <p className="text-sm text-on-surface-variant line-clamp-2 mb-6">{strategy.description}</p>
-                  <div className="flex items-center gap-6 mb-6">
-                    <div className="flex flex-col">
-                      <span className="text-[11px] text-secondary uppercase tracking-widest mb-1">APY</span>
-                      <span className="text-lg font-bold text-white tabular-nums">{strategy.apy.toFixed(1)}%</span>
+                  <div className="grid grid-cols-2 gap-3 mb-5 text-[11px]">
+                    <div className="rounded-lg border border-outline-variant/15 bg-surface-container-low px-3 py-2">
+                      <div className="text-secondary uppercase tracking-widest mb-1">APY</div>
+                      <div className="text-sm font-semibold text-white tabular-nums">{strategy.apy.toFixed(1)}%</div>
                     </div>
-                    <div className="w-px h-8 bg-surface-container-high"></div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] text-secondary uppercase tracking-widest mb-1">
-                        Risk Score
-                      </span>
-                      <span className="text-sm font-medium text-white tabular-nums mt-1">
-                        {strategy.riskScore.toFixed(1)} / 10
-                      </span>
+                    <div className="rounded-lg border border-outline-variant/15 bg-surface-container-low px-3 py-2">
+                      <div className="text-secondary uppercase tracking-widest mb-1">Agent Rep</div>
+                      <div className="text-sm font-semibold text-white tabular-nums">
+                        {strategy.agentRep.toLocaleString("en-US")}
+                      </div>
                     </div>
-                    <div className="w-px h-8 bg-surface-container-high"></div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] text-secondary uppercase tracking-widest mb-1">Agent Rep</span>
-                      <span className="text-sm font-medium text-white tabular-nums mt-1">
-                        {strategy.agentRep.toFixed(1)}%
-                      </span>
+                    <div className="rounded-lg border border-outline-variant/15 bg-surface-container-low px-3 py-2">
+                      <div className="text-secondary uppercase tracking-widest mb-1">Status</div>
+                      <div
+                        className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${toStatusClass(strategy.status)}`}
+                      >
+                        {toStatusLabel(strategy.status)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-outline-variant/15 bg-surface-container-low px-3 py-2">
+                      <div className="text-secondary uppercase tracking-widest mb-1">Agent URI</div>
+                      <div className="text-xs font-mono text-white break-all">{toDisplayUri(strategy.agentUri)}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-outline-variant/15 bg-surface-container-low px-3 py-3 mb-6 text-[11px]">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-secondary uppercase tracking-widest mb-1">Protocol</div>
+                        <div className="text-xs text-white">{strategy.protocolPlan.protocol}</div>
+                      </div>
+                      <div>
+                        <div className="text-secondary uppercase tracking-widest mb-1">Chain</div>
+                        <div className="text-xs text-white">{strategy.protocolPlan.chain}</div>
+                      </div>
+                      <div>
+                        <div className="text-secondary uppercase tracking-widest mb-1">Amount Mode</div>
+                        <div className="text-xs text-white">{strategy.protocolPlan.amountMode}</div>
+                      </div>
+                      <div>
+                        <div className="text-secondary uppercase tracking-widest mb-1">Asset</div>
+                        <div className="text-xs text-white">
+                          {strategy.protocolPlan.assetSymbol} · <span className="font-mono">{strategy.protocolPlan.assetAddress}</span>
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-secondary uppercase tracking-widest mb-1">Pool Address</div>
+                        <div className="text-xs text-white font-mono break-all">{strategy.protocolPlan.poolAddress}</div>
+                      </div>
+                      <div>
+                        <div className="text-secondary uppercase tracking-widest mb-1">Referral Code</div>
+                        <div className="text-xs text-white tabular-nums">{strategy.protocolPlan.referralCode}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-auto pt-4 border-t border-surface-container-low">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-secondary">Protocols:</span>
-                    {strategy.protocols.map((protocol) => (
-                      <span
-                        key={protocol}
-                        className="px-2 py-1 text-[10px] bg-surface-container text-on-surface-variant rounded"
-                      >
-                        {protocol}
-                      </span>
-                    ))}
+                    <span className="text-[11px] text-secondary">Protocol plan ready</span>
                   </div>
                   <Link
                     href={`/strategy/${strategy.id}`}
