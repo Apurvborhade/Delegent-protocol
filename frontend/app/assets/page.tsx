@@ -6,7 +6,6 @@ export default function AssetsPage() {
   return (
     <div className="text-on-surface antialiased min-h-screen flex bg-[#0A0B0D]">
       <Sidebar active="assets" variant="assets-view" />
-      
       <div className="flex-1 ml-[220px] flex flex-col min-h-screen">
         <Topbar variant="assets" />
 
@@ -22,7 +21,7 @@ export default function AssetsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="flex items-center text-[#85d996] text-xs font-medium bg-[#85d996]/10 px-1.5 py-0.5 rounded">
-                  <span className="material-symbols-outlined text-[12px] mr-1">trending_up</span> +2.4%
+                  <span className="material-symbols-outlined text-[12px] mr-1">trendingg_up</span> +2.4%
                 </span>
                 <span className="text-xs text-secondary">vs last 7d</span>
               </div>
