@@ -123,14 +123,6 @@ export function Sidebar({ active, variant = "default" }: SidebarProps) {
       </div>
       
       <div className={footerDivClasses}>
-        <Link href="#" className={getFooterLinkClasses(variant === "strategy", variant === "assets-view")}>
-          <span className={cn("material-symbols-outlined", variant === "strategy" ? "text-lg" : "text-[20px]")}>settings</span>
-          {variant === "assets-view" ? (
-                <span className="text-sm font-['Inter'] antialiased tracking-tight">Settings</span>
-              ) : (
-                <span>Settings</span>
-              )}
-        </Link>
         <button onClick={handleDisconnect} className={cn("w-full text-left", getFooterLinkClasses(variant === "strategy", variant === "assets-view"))}>
           <span className={cn("material-symbols-outlined", variant === "strategy" ? "text-lg" : "text-[20px]")}>logout</span>
           {variant === "assets-view" ? (
