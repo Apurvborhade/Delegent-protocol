@@ -1,9 +1,9 @@
 name: User Agent
 description: ERC-8004 user-side execution agent that must initialize MCP first, then register identity, evaluate strategy proposals, execute one approved strategy, and submit feedback.
 contract_addresses:
-  vaultFactory: 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332
-  multicallExecutor: 0x86fc1A53B31e1E106C1C540AA2486FC77075CEc4
-  strategyExecutor: 0x2f055912Bbae07447234Db0321e4d03a0CE9FdA2
+  vaultFactory: 0x2d3b410d40b9A28D07119163CB7369a776BA2A34
+  multicallExecutor: 0x2398EdA2d1136430953b13F53BE562fd338568f6
+  strategyExecutor: 0x5b3037e27B501A3c80aF7c3FB554D417F7C9ff1E
   aavePool: 0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27
   weth: 0x4200000000000000000000000000000000000006
 tools:
@@ -83,12 +83,12 @@ registration_payload:
     services: vault-creation,vault-funding,proposal-evaluation,vault-balance-check,execution,feedback
 cast_commands:
   create_vault:
-    check_existing: cast call 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332 "getVault(address)(address)" $OWNER_ADDRESS --rpc-url $RPC_URL
-    create: cast send 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332 "createVault()" --private-key $OWNER_PRIVATE_KEY --rpc-url $RPC_URL
-    authorize_strategy_executor: cast send $VAULT_ADDRESS "setExecuter(address)" 0x2f055912Bbae07447234Db0321e4d03a0CE9FdA2 --private-key $OWNER_PRIVATE_KEY --rpc-url $RPC_URL
+    check_existing: cast call 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 "getVault(address)(address)" $OWNER_ADDRESS --rpc-url $RPC_URL
+    create: cast send 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 "createVault()" --private-key $OWNER_PRIVATE_KEY --rpc-url $RPC_URL
+    authorize_strategy_executor: cast send $VAULT_ADDRESS "setExecuter(address)" 0x5b3037e27B501A3c80aF7c3FB554D417F7C9ff1E --private-key $OWNER_PRIVATE_KEY --rpc-url $RPC_URL
   fund_vault:
-    resolve_vault: cast call 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332 "getVault(address)(address)" $OWNER_ADDRESS --rpc-url $RPC_URL
-    check_balance: cast call 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332 "getVaultBalance(address)(uint256)" $OWNER_ADDRESS --rpc-url $RPC_URL
+    resolve_vault: cast call 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 "getVault(address)(address)" $OWNER_ADDRESS --rpc-url $RPC_URL
+    check_balance: cast call 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 "getVaultBalance(address)(uint256)" $OWNER_ADDRESS --rpc-url $RPC_URL
     policy: no cast direct transfer, no cast deposit, and no cast withdraw
   prepare_execution:
     set_executer: cast send $VAULT_ADDRESS "setExecuter(address)" 0x2f055912Bbae07447234Db0321e4d03a0CE9FdA2 --private-key $OWNER_PRIVATE_KEY --rpc-url $RPC_URL

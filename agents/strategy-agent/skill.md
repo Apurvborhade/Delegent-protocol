@@ -1,9 +1,9 @@
 name: Strategy Agent
 description: ERC-8004 DeFi strategy agent that first initializes an MCP session, then registers its on-chain and offchain identity, and stops before proposal submission.
 contract_addresses:
-  vaultFactory: 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332
-  multicallExecutor: 0x86fc1A53B31e1E106C1C540AA2486FC77075CEc4
-  strategyExecutor: 0x2f055912Bbae07447234Db0321e4d03a0CE9FdA2
+  vaultFactory: 0x2d3b410d40b9A28D07119163CB7369a776BA2A34
+  multicallExecutor: 0x2398EdA2d1136430953b13F53BE562fd338568f6
+  strategyExecutor: 0x5b3037e27B501A3c80aF7c3FB554D417F7C9ff1E
   aavePool: 0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27
   weth: 0x4200000000000000000000000000000000000006
   usdc: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
@@ -70,9 +70,9 @@ instructions:
   - After the transfer succeeds, confirm success by resolving the agent identity record.
   - Query get_vault_signals to detect user-published readiness data after vault funding.
   - Use these live protocol addresses when reasoning about execution viability.
-  - VaultFactory 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332
-  - MulticallExecutor 0x86fc1A53B31e1E106C1C540AA2486FC77075CEc4
-  - StrategyExecutor 0x2f055912Bbae07447234Db0321e4d03a0CE9FdA2
+  - VaultFactory 0x2d3b410d40b9A28D07119163CB7369a776BA2A34
+  - MulticallExecutor 0x2398EdA2d1136430953b13F53BE562fd338568f6
+  - StrategyExecutor 0x5b3037e27B501A3c80aF7c3FB554D417F7C9ff1E
   - Aave Pool 0x8bAB6d1b75f19e9D9fCe8b9BD338844fF79aE27
   - WETH 0x4200000000000000000000000000000000000006
   - USDC 0x036CbD53842c5426634e7929541eC2318f3dCF7e
@@ -98,8 +98,8 @@ registration_payload:
     services: proposal-generation,calldata-authoring,defi-analysis,aave-strategy
 market_signals:
   offchain_ready_signal: query get_vault_signals for the target owner or vault and look for status ready-for-strategy
-  funded_vault_check: cast call 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332 "getVault(address)(address)" $OWNER_ADDRESS --rpc-url $RPC_URL
-  vault_balance_check: cast call 0x88fee1984B9a4580984dAA6C8b5d8B7AF6223332 "getVaultBalance(address)(uint256)" $OWNER_ADDRESS --rpc-url $RPC_URL
+  funded_vault_check: cast call 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 "getVault(address)(address)" $OWNER_ADDRESS --rpc-url $RPC_URL
+  vault_balance_check: cast call 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 "getVaultBalance(address)(uint256)" $OWNER_ADDRESS --rpc-url $RPC_URL
   readiness_rule: a ready-for-strategy vault signal plus a nonzero vault address and nonzero vault balance means the user side is ready for strategy discovery
   wait_rule: if no ready-for-strategy signal is found, do not submit_proposal yet and continue waiting
 notes:
@@ -439,9 +439,9 @@ console.assert(recovered.toLowerCase() === wallet.address.toLowerCase(), "Signat
 ## Protocol Addresses
 | Contract | Address |
 |----------|---------|
-| VaultFactory | 0xe6CE539947CE8537EA302e98b1692D6d4648B3C6 |
-| MulticallExecutor | 0xd7c06D0A416e2A2DE065Ae22f80a641683672351 |
-| StrategyExecutor | 0xF8De32E58f5d69939312156F3F2e99f8d2D326e8 |
+| VaultFactory | 0x2d3b410d40b9A28D07119163CB7369a776BA2A34 |
+| MulticallExecutor | 0x2398EdA2d1136430953b13F53BE562fd338568f6 |
+| StrategyExecutor | 0x5b3037e27B501A3c80aF7c3FB554D417F7C9ff1E |
 | Aave Pool | 0x8bAB6d1b75f19e9D9fCe8b9BD338844fF79aE27 |
 | WETH | 0x4200000000000000000000000000000000000006 |
 | USDC (Base Sepolia) | 0x036CbD53842c5426634e7929541eC2318f3dCF7e |
