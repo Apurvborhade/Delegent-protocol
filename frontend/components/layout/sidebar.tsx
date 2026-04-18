@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useWallet } from "@/context/WalletContext";
+import { useRouter } from "next/navigation";
 
 type SidebarProps = {
   active: "vault" | "assets" | "strategy-market" | "leaderboard";
@@ -7,6 +11,15 @@ type SidebarProps = {
 };
 
 export function Sidebar({ active, variant = "default" }: SidebarProps) {
+  const { disconnectWallet } = useWallet();
+  const router = useRouter();
+
+  const handleDisconnect = (e: React.MouseEvent) => {
+    e.preventDefault();
+    disconnectWallet();
+    router.push("/connect-wallet");
+  };
+
   // Vault
   // <nav class="hidden md:flex flex-col p-4 gap-1 bg-[#0D0E10] text-[#4F7EFF] font-['Inter'] antialiased tracking-tight fixed left-0 top-0 h-full w-[220px] border-r border-[#1A1C1F] shadow-none z-50">
   // Strategy Market
@@ -118,14 +131,14 @@ export function Sidebar({ active, variant = "default" }: SidebarProps) {
                 <span>Settings</span>
               )}
         </Link>
-        <Link href="#" className={getFooterLinkClasses(variant === "strategy", variant === "assets-view")}>
+        <button onClick={handleDisconnect} className={cn("w-full text-left", getFooterLinkClasses(variant === "strategy", variant === "assets-view"))}>
           <span className={cn("material-symbols-outlined", variant === "strategy" ? "text-lg" : "text-[20px]")}>logout</span>
           {variant === "assets-view" ? (
                 <span className="text-sm font-['Inter'] antialiased tracking-tight">Disconnect Wallet</span>
               ) : (
                 <span>Disconnect Wallet</span>
               )}
-        </Link>
+        </button>
       </div>
     </nav>
   );
