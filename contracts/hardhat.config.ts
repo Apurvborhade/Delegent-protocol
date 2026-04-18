@@ -7,6 +7,12 @@ import { fileURLToPath } from "node:url";
 const contractsRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const networks = {
+  baseSepolia: {
+    type: "http" as const,
+    url: process.env.BASE_SEPOLIA_RPC_URL ?? "https://sepolia.base.org",
+    chainId: 84532,
+    accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : ("remote" as const),
+  },
   helaTestnet: {
     type: "http" as const,
     url: process.env.HELA_TESTNET_RPC_URL ?? "https://testnet-rpc.helachain.com",
@@ -18,6 +24,14 @@ const networks = {
 export default defineConfig({
   plugins: [hardhatEthers],
   chainDescriptors: {
+    84532: {
+      name: "Base Sepolia",
+      blockExplorers: {
+        etherscan: {
+          url: "https://sepolia.basescan.org",
+        },
+      },
+    },
     666888: {
       name: "HeLa Testnet",
       blockExplorers: {

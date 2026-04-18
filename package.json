@@ -15,7 +15,8 @@
     "prisma:migrate": "prisma migrate dev",
     "contracts:compile": "cd contracts && hardhat compile",
     "contracts:deploy": "cd contracts && hardhat run scripts/deploy.js",
-    "contracts:deploy:hela": "cd contracts && hardhat run --network helaTestnet scripts/deploy.js"
+    "contracts:deploy:hela": "cd contracts && hardhat run --network helaTestnet scripts/deploy.js",
+    "contracts:deploy:multi": "cd contracts && hardhat run scripts/deploy-multichain.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
