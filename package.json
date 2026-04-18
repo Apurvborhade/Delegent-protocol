@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm build && concurrently --raw \"pnpm dev:backend\" \"pnpm dev:mcp\"",
+    "dev": "pnpm build && concurrently --raw \"pnpm dev:backend\"",
     "dev:backend": "node --env-file=.env dist/backend/server.js",
     "dev:mcp": "node --env-file=.env dist/mcp/server.js",
     "demo": "pnpm build && node --env-file=.env dist/agents/demo.js",
