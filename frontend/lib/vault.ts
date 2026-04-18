@@ -27,7 +27,11 @@ export async function resolveVaultAddress(ownerAddress: string): Promise<Address
       args: [ownerAddress as Address],
     });
 
-    if (!vaultAddress || vaultAddress === zeroAddress || !isAddress(vaultAddress)) {
+    if (
+      typeof vaultAddress !== "string" ||
+      vaultAddress === zeroAddress ||
+      !isAddress(vaultAddress)
+    ) {
       return null;
     }
 
