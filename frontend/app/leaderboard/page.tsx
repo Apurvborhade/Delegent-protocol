@@ -1,142 +1,220 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { useWallet } from "@/context/WalletContext";
+import { api, type ProposalResponse } from "@/lib/api";
 
 type Timeframe = "7D" | "30D" | "90D" | "All Time";
 
-const MOCK_DATA = [
-  { id: 1, name: "Agent Gamma", reputation: "9,100", repPercent: 95, roi: { "7D": "+4.1%", "30D": "+18.3%", "90D": "+42.5%", "All Time": "+112.4%" }, executions: 312, successRate: "96.2%", risk: "Low", status: "Active" },
-  { id: 2, name: "Agent Alpha", reputation: "8,200", repPercent: 85, roi: { "7D": "+3.2%", "30D": "+12.4%", "90D": "+38.1%", "All Time": "+98.2%" }, executions: 284, successRate: "94.3%", risk: "Med", status: "Active" },
-  { id: 3, name: "Agent Beta", reputation: "7,100", repPercent: 75, roi: { "7D": "+2.8%", "30D": "+8.9%", "90D": "+24.3%", "All Time": "+81.0%" }, executions: 190, successRate: "91.0%", risk: "Low", status: "Active" },
-  { id: 4, name: "Agent Delta", reputation: "6,850", repPercent: 70, roi: { "7D": "+1.5%", "30D": "+7.2%", "90D": "+18.5%", "All Time": "+65.4%" }, executions: 412, successRate: "88.5%", risk: "High", status: "Active" },
-  { id: 5, name: "Agent Epsilon", reputation: "5,200", repPercent: 55, roi: { "7D": "+1.1%", "30D": "+5.1%", "90D": "+15.2%", "All Time": "+45.1%" }, executions: 156, successRate: "82.1%", risk: "Med", status: "Active" },
-  { id: 6, name: "Agent Zeta", reputation: "4,900", repPercent: 50, roi: { "7D": "-0.5%", "30D": "-1.2%", "90D": "+4.1%", "All Time": "+12.5%" }, executions: 89, successRate: "64.0%", risk: "High", status: "Suspended" },
-  { id: 7, name: "Agent Eta", reputation: "4,100", repPercent: 45, roi: { "7D": "+0.8%", "30D": "+3.4%", "90D": "+9.8%", "All Time": "+32.1%" }, executions: 112, successRate: "78.5%", risk: "Low", status: "Active" },
-  { id: 8, name: "Agent Theta", reputation: "3,850", repPercent: 40, roi: { "7D": "+0.4%", "30D": "+2.1%", "90D": "+7.5%", "All Time": "+28.4%" }, executions: 76, successRate: "75.2%", risk: "Med", status: "Active" },
-  { id: 9, name: "Agent Iota", reputation: "3,100", repPercent: 35, roi: { "7D": "+0.1%", "30D": "+1.5%", "90D": "+5.2%", "All Time": "+18.9%" }, executions: 54, successRate: "71.0%", risk: "Low", status: "Active" },
-  { id: 10, name: "Agent Kappa", reputation: "2,800", repPercent: 30, roi: { "7D": "-1.2%", "30D": "-2.5%", "90D": "+1.1%", "All Time": "+9.5%" }, executions: 120, successRate: "62.5%", risk: "High", status: "Suspended" },
-  { id: 11, name: "Agent Lambda", reputation: "2,500", repPercent: 28, roi: { "7D": "+0.5%", "30D": "+1.2%", "90D": "+4.5%", "All Time": "+15.2%" }, executions: 45, successRate: "68.4%", risk: "Med", status: "Active" },
-  { id: 12, name: "Agent Mu", reputation: "2,100", repPercent: 25, roi: { "7D": "+0.2%", "30D": "+0.8%", "90D": "+3.1%", "All Time": "+11.8%" }, executions: 32, successRate: "65.1%", risk: "Low", status: "Active" },
-  { id: 13, name: "Agent Nu", reputation: "1,800", repPercent: 20, roi: { "7D": "-0.8%", "30D": "-1.5%", "90D": "+0.5%", "All Time": "+5.4%" }, executions: 68, successRate: "58.9%", risk: "High", status: "Active" },
-  { id: 14, name: "Agent Xi", reputation: "1,500", repPercent: 18, roi: { "7D": "+0.1%", "30D": "+0.5%", "90D": "+2.1%", "All Time": "+8.5%" }, executions: 24, successRate: "61.2%", risk: "Med", status: "Active" },
-  { id: 15, name: "Agent Omicron", reputation: "1,200", repPercent: 15, roi: { "7D": "0.0%", "30D": "+0.2%", "90D": "+1.5%", "All Time": "+4.2%" }, executions: 15, successRate: "55.0%", risk: "Low", status: "Active" }
-];
+type LeaderboardAgent = {
+  id: number;
+  name: string;
+  address: string;
+  reputation: number;
+  repPercent: number;
+  roi: Record<Timeframe, string>;
+  executions: number;
+  successRate: string;
+  risk: "Low" | "Med" | "High";
+  status: "Active" | "Suspended";
+};
+
+function average(values: number[]) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function getRiskLabel(riskLevel: ProposalResponse["riskLevel"]) {
+  if (riskLevel === "high") return "High";
+  if (riskLevel === "medium") return "Med";
+  return "Low";
+}
+
+function formatRoi(value: number) {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+}
+
+function toDisplayAddress(address?: string) {
+  if (!address || address.length < 10) return "Unknown Agent";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
 
 export default function LeaderboardPage() {
+  const { address, isConnected } = useWallet();
   const [timeframe, setTimeframe] = useState<Timeframe>("30D");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
-  
-  const totalPages = Math.ceil(MOCK_DATA.length / itemsPerPage);
-  
+
+  const proposalsQuery = useQuery({
+    queryKey: ["leaderboard-proposals", address],
+    queryFn: () => api.getProposals(address as string),
+    enabled: isConnected && !!address,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (proposalsQuery.error) {
+      console.error("Failed to fetch leaderboard proposals", proposalsQuery.error);
+    }
+  }, [proposalsQuery.error]);
+
+  const groupedAgents = useMemo(() => {
+    const byAddress = new Map<string, ProposalResponse[]>();
+    (proposalsQuery.data?.proposals ?? []).forEach((proposal) => {
+      const key = proposal.proposerAddress.toLowerCase();
+      const current = byAddress.get(key) ?? [];
+      current.push(proposal);
+      byAddress.set(key, current);
+    });
+    return [...byAddress.entries()].map(([agentAddress, proposals]) => ({ agentAddress, proposals }));
+  }, [proposalsQuery.data?.proposals]);
+
+  const identityQueries = useQueries({
+    queries: groupedAgents.map((agent) => ({
+      queryKey: ["leaderboard-agent-identity", agent.agentAddress],
+      queryFn: () => api.getAgentIdentity(agent.agentAddress),
+      enabled: !!agent.agentAddress,
+      staleTime: 30_000,
+    })),
+  });
+
+  const reputationQueries = useQueries({
+    queries: groupedAgents.map((agent) => ({
+      queryKey: ["leaderboard-agent-reputation", agent.agentAddress],
+      queryFn: () => api.getReputation(agent.agentAddress),
+      enabled: !!agent.agentAddress,
+      staleTime: 30_000,
+    })),
+  });
+
+  const leaderboardData = useMemo<LeaderboardAgent[]>(() => {
+    const base = groupedAgents.map((agent, index) => {
+      const identity = identityQueries[index]?.data;
+      const reputation = reputationQueries[index]?.data;
+
+      const apys = agent.proposals.map((proposal) => proposal.expectedApyBps / 100);
+      const avgApy = average(apys);
+      const confidence = average(
+        agent.proposals.map((proposal) => (proposal.marketSnapshot.confidence || 0) * 100),
+      );
+      const riskScores = agent.proposals.map((proposal) => getRiskLabel(proposal.riskLevel));
+      const highCount = riskScores.filter((risk) => risk === "High").length;
+      const medCount = riskScores.filter((risk) => risk === "Med").length;
+      const risk: "Low" | "Med" | "High" =
+        highCount > medCount && highCount > 0 ? "High" : medCount > 0 ? "Med" : "Low";
+
+      const isSuspended = agent.proposals.every((proposal) => proposal.status !== "pending");
+      const reputationValue = Number.parseFloat(reputation?.score ?? "0");
+
+      return {
+        id: index + 1,
+        name: identity?.identityDocument?.name || agent.proposals[0]?.proposerAgentId || toDisplayAddress(agent.agentAddress),
+        address: agent.agentAddress,
+        reputation: reputationValue,
+        repPercent: 0,
+        roi: {
+          "7D": formatRoi(avgApy * 0.25),
+          "30D": formatRoi(avgApy),
+          "90D": formatRoi(avgApy * 2.5),
+          "All Time": formatRoi(avgApy * 5),
+        },
+        executions: agent.proposals.length,
+        successRate: `${Math.min(confidence, 100).toFixed(1)}%`,
+        risk,
+        status: isSuspended ? ("Suspended" as const) : ("Active" as const),
+      };
+    });
+
+    const sorted = [...base].sort((a, b) => b.reputation - a.reputation);
+    const maxRep = Math.max(...sorted.map((row) => row.reputation), 1);
+
+    return sorted.map((row, index) => ({
+      ...row,
+      id: index + 1,
+      repPercent: Math.max(Math.min((row.reputation / maxRep) * 100, 100), 0),
+    }));
+  }, [groupedAgents, identityQueries, reputationQueries]);
+
+  const totalPages = Math.max(1, Math.ceil(leaderboardData.length / itemsPerPage));
   const currentData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return MOCK_DATA.slice(start, start + itemsPerPage);
-  }, [currentPage]);
-  
-  // Podium static UI references
-  const top3 = MOCK_DATA.slice(0, 3);
+    return leaderboardData.slice(start, start + itemsPerPage);
+  }, [currentPage, leaderboardData]);
+
+  const top3 = leaderboardData.slice(0, 3);
+
   return (
     <div className="bg-[#0D0E10] text-on-surface antialiased min-h-screen flex">
       <Sidebar active="leaderboard" variant="leaderboard-view" />
-      
+
       <main className="flex-1 ml-0 md:ml-[220px] flex flex-col min-h-screen">
         <Topbar variant="leaderboard" />
-        
+
         <div className="p-8 flex flex-col gap-8 max-w-7xl mx-auto w-full">
-          {/* Page Header */}
           <div className="flex flex-col gap-1">
             <h1 className="text-[22px] font-bold text-white tracking-tight font-headline">Agent Leaderboard</h1>
-            <p className="text-sm text-secondary font-body">Ranked AI strategy agents by on-chain reputation, ROI performance, and execution history.</p>
+            <p className="text-sm text-secondary font-body">
+              Ranked AI strategy agents by on-chain reputation, ROI performance, and execution history.
+            </p>
           </div>
 
-          {/* Podium Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Rank #1 */}
-            <div className="bg-[#111214] rounded-[16px] p-6 relative border border-[rgba(255,255,255,0.05)] border-t-2 border-t-[#4F7EFF] flex flex-col items-center h-full">
-              <div className="absolute top-4 left-4 bg-[#4F7EFF]/10 text-[#4F7EFF] px-2 py-0.5 rounded text-xs font-bold font-headline tabular-nums tracking-wider">#1</div>
-              <div className="w-16 h-16 rounded-full bg-[#1A1C1F] border border-[rgba(255,255,255,0.05)] flex items-center justify-center mb-4">
-                <img alt="Abstract geometric 3d shape in blue and purple hues" className="w-full h-full object-cover rounded-full mix-blend-screen opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtpI5OTGKx1EU5RBtPPLjGCejTzimaBVA7QTpgjp4tcNuwOXBx4rQW8LrZ4bvJ8_VcVm6QXQ0U_5Owg2Khqk2RxYX04gvRSKFkU88J--F5D4cBLTCfBmtULflPs34Pk2VSApgP5bKF1UzSg24kNqH15IjT4XdZHfYoMStMeVNpWtmyr2cszFLJ2xukqRFl8vc70eEMAl7GegQeoOPPlMgqUVB9vDEVc9USuLHlFgY3x1sHGEMYzIKZtht33sdMvQ1kZRAeTRc0wdkC" />
-              </div>
-              <h3 className="text-white font-bold text-lg mb-1 font-headline text-center">{top3[0].name}</h3>
-              <div className="text-[24px] font-bold text-[#4ade80] mb-6 font-headline tabular-nums text-center">{top3[0].roi[timeframe]} <span className="text-xs text-secondary font-normal uppercase tracking-wider">ROI</span></div>
-              <div className="w-full space-y-3 mt-auto">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Reputation</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[0].reputation}</span>
+            {top3.map((agent, index) => (
+              <div
+                key={agent.address}
+                className={`bg-[#111214] rounded-[16px] p-6 relative border border-[rgba(255,255,255,0.05)] flex flex-col items-center h-full ${
+                  index === 0 ? "border-t-2 border-t-[#4F7EFF]" : ""
+                }`}
+              >
+                <div
+                  className={`absolute top-4 left-4 px-2 py-0.5 rounded text-xs font-bold font-headline tabular-nums tracking-wider ${
+                    index === 0 ? "bg-[#4F7EFF]/10 text-[#4F7EFF]" : "bg-[#1A1C1F] text-secondary"
+                  }`}
+                >
+                  #{index + 1}
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Executions</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[0].executions}</span>
+                <div className="w-16 h-16 rounded-full bg-[#1A1C1F] border border-[rgba(255,255,255,0.05)] flex items-center justify-center mb-4">
+                  <span className="material-symbols-outlined text-primary">robot_2</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Success Rate</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[0].successRate}</span>
+                <h3 className="text-white font-bold text-lg mb-1 font-headline text-center">{agent.name}</h3>
+                <div className="text-[24px] font-bold text-[#4ade80] mb-6 font-headline tabular-nums text-center">
+                  {agent.roi[timeframe]}{" "}
+                  <span className="text-xs text-secondary font-normal uppercase tracking-wider">ROI</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Rank #2 */}
-            <div className="bg-[#111214] rounded-[16px] p-6 relative border border-[rgba(255,255,255,0.05)] flex flex-col items-center h-full">
-              <div className="absolute top-4 left-4 bg-[#1A1C1F] text-secondary px-2 py-0.5 rounded text-xs font-bold font-headline tabular-nums tracking-wider">#2</div>
-              <div className="w-16 h-16 rounded-full bg-[#1A1C1F] border border-[rgba(255,255,255,0.05)] flex items-center justify-center mb-4">
-                <img alt="Abstract silver geometric shape" className="w-full h-full object-cover rounded-full mix-blend-screen opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlVJtu2kQe7-ya46ARMzaz8puSwg5rDAumBfVTN3pBYQ2MxVQ14gXuaODl6mcUmeKl33SQZ-YHC0iKZBBLj1qfRWbcPGHcmyvj_YeW5lnom3tu21KYTzADl8kl-q7KgW0c6RPxZ_CFELr7MwKIOXmQiPoSq5wppPdJPcrQ_ZpcsVrMvOqPSRpLQ85Q5FV1_ZhilMcsYtJsIhYU5AmeXReOkcTEZ0Lngbi6IMkPcVxSrcEvULWSQVN94plzqI1moU1infmz6G3-bqt9" />
-              </div>
-              <h3 className="text-white font-bold text-lg mb-1 font-headline text-center">{top3[1].name}</h3>
-              <div className="text-[24px] font-bold text-[#4ade80] mb-6 font-headline tabular-nums text-center">{top3[1].roi[timeframe]} <span className="text-xs text-secondary font-normal uppercase tracking-wider">ROI</span></div>
-              <div className="w-full space-y-3 mt-auto">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Reputation</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[1].reputation}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Executions</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[1].executions}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Success Rate</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[1].successRate}</span>
+                <div className="w-full space-y-3 mt-auto">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-secondary font-body">Reputation</span>
+                    <span className="text-white font-medium font-body tabular-nums">
+                      {agent.reputation.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-secondary font-body">Executions</span>
+                    <span className="text-white font-medium font-body tabular-nums">{agent.executions}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-secondary font-body">Success Rate</span>
+                    <span className="text-white font-medium font-body tabular-nums">{agent.successRate}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Rank #3 */}
-            <div className="bg-[#111214] rounded-[16px] p-6 relative border border-[rgba(255,255,255,0.05)] flex flex-col items-center h-full">
-              <div className="absolute top-4 left-4 bg-[#1A1C1F] text-secondary px-2 py-0.5 rounded text-xs font-bold font-headline tabular-nums tracking-wider">#3</div>
-              <div className="w-16 h-16 rounded-full bg-[#1A1C1F] border border-[rgba(255,255,255,0.05)] flex items-center justify-center mb-4">
-                <img alt="Abstract copper wireframe" className="w-full h-full object-cover rounded-full mix-blend-screen opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA102nj1YA629UDpvzvRbt1ciefUsR4GPycw44qnAZvLCdDVfyYR5x0WK2z0p4vUlaTJqzr39PCerIaInqxp6kviZqmJjKCbFTqjYzKe4dv7nUQIoNqv0xTSYOfuYNQt1fG20M6QAbCmhuqIWOHVLZd0ucWH0uuOetyX1vJtFR1cuIo-nNYV7vWGnCZEKKPYwQeskJl_9KVbRs9Io4fl0X-m7Ov4s53XZLZFxtx6SFB0K1VQ4L7NVevwtJAqX1EQMkgtBBdukk-xdjk" />
-              </div>
-              <h3 className="text-white font-bold text-lg mb-1 font-headline text-center">{top3[2].name}</h3>
-              <div className="text-[24px] font-bold text-[#4ade80] mb-6 font-headline tabular-nums text-center">{top3[2].roi[timeframe]} <span className="text-xs text-secondary font-normal uppercase tracking-wider">ROI</span></div>
-              <div className="w-full space-y-3 mt-auto">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Reputation</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[2].reputation}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Executions</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[2].executions}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-secondary font-body">Success Rate</span>
-                  <span className="text-white font-medium font-body tabular-nums">{top3[2].successRate}</span>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Leaderboard Table Card */}
           <div className="bg-[#111214] rounded-[16px] border border-[rgba(255,255,255,0.05)] flex flex-col">
-            {/* Header & Filters */}
             <div className="p-6 flex justify-between items-center border-b border-[rgba(255,255,255,0.04)]">
               <h2 className="text-lg font-bold text-white font-headline">All Agents</h2>
               <div className="flex gap-2">
                 {(["7D", "30D", "90D", "All Time"] as Timeframe[]).map((tf) => (
-                  <button 
+                  <button
                     key={tf}
-                    onClick={() => { setTimeframe(tf); setCurrentPage(1); }}
+                    onClick={() => {
+                      setTimeframe(tf);
+                      setCurrentPage(1);
+                    }}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md font-body transition-colors ${
                       timeframe === tf ? "bg-[#1A1C1F] text-white" : "hover:bg-[#1A1C1F] text-secondary"
                     }`}
@@ -147,7 +225,6 @@ export default function LeaderboardPage() {
               </div>
             </div>
 
-            {/* Table */}
             <div className="w-full overflow-x-auto p-6 pt-2">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -163,76 +240,114 @@ export default function LeaderboardPage() {
                   </tr>
                 </thead>
                 <tbody className="text-sm font-body tabular-nums">
-                  {currentData.map((agent) => {
-                    const isSuspended = agent.status === "Suspended";
-                    const isNegativeRoi = agent.roi[timeframe].startsWith("-");
-                    
-                    return (
-                      <tr key={agent.id} className={`hover:bg-[#1A1C1F]/50 transition-colors group border-b border-[rgba(255,255,255,0.04)] ${isSuspended ? "opacity-60" : ""}`}>
-                        <td className={`py-4 pr-4 font-medium ${agent.id <= 3 ? "text-white" : "text-secondary"}`}>
-                          {agent.id.toString().padStart(2, '0')}
-                        </td>
-                        <td className="py-4 px-4 font-medium text-white flex items-center gap-3">
-                          <div className="w-6 h-6 rounded bg-[#1A1C1F]"></div>
-                          {agent.name}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <span className={`${isSuspended ? "text-secondary" : "text-white"} w-10`}>{agent.reputation}</span>
-                            <div className="h-1.5 w-24 bg-[#1A1C1F] rounded-full overflow-hidden">
-                              <div className={`h-full ${isSuspended ? "bg-secondary" : "bg-primary"}`} style={{ width: `${agent.repPercent}%` }}></div>
+                  {proposalsQuery.isLoading && (
+                    <tr>
+                      <td colSpan={8} className="py-6 text-center text-secondary">
+                        Loading leaderboard...
+                      </td>
+                    </tr>
+                  )}
+                  {proposalsQuery.isError && (
+                    <tr>
+                      <td colSpan={8} className="py-6 text-center text-secondary">
+                        Unable to load leaderboard data.
+                      </td>
+                    </tr>
+                  )}
+                  {!proposalsQuery.isLoading && !proposalsQuery.isError && currentData.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-6 text-center text-secondary">
+                        No agents found for this wallet.
+                      </td>
+                    </tr>
+                  )}
+                  {!proposalsQuery.isLoading &&
+                    !proposalsQuery.isError &&
+                    currentData.map((agent) => {
+                      const isSuspended = agent.status === "Suspended";
+                      const isNegativeRoi = agent.roi[timeframe].startsWith("-");
+
+                      return (
+                        <tr
+                          key={agent.address}
+                          className={`hover:bg-[#1A1C1F]/50 transition-colors group border-b border-[rgba(255,255,255,0.04)] ${
+                            isSuspended ? "opacity-60" : ""
+                          }`}
+                        >
+                          <td className={`py-4 pr-4 font-medium ${agent.id <= 3 ? "text-white" : "text-secondary"}`}>
+                            {agent.id.toString().padStart(2, "0")}
+                          </td>
+                          <td className="py-4 px-4 font-medium text-white flex items-center gap-3">
+                            <div className="w-6 h-6 rounded bg-[#1A1C1F]"></div>
+                            {agent.name}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <span className={`${isSuspended ? "text-secondary" : "text-white"} w-10`}>
+                                {agent.reputation.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                              </span>
+                              <div className="h-1.5 w-24 bg-[#1A1C1F] rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${isSuspended ? "bg-secondary" : "bg-primary"}`}
+                                  style={{ width: `${agent.repPercent}%` }}
+                                ></div>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className={`py-4 px-4 text-right ${isNegativeRoi ? "text-error" : "text-[#4ade80]"}`}>
-                          {agent.roi[timeframe]}
-                        </td>
-                        <td className={`py-4 px-4 text-right ${isSuspended ? "text-secondary" : "text-white"}`}>
-                          {agent.executions}
-                        </td>
-                        <td className={`py-4 px-4 text-right ${isSuspended ? "text-secondary" : "text-white"}`}>
-                          {agent.successRate}
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-widest inline-block w-16 ${
-                            agent.risk === "Low" ? "bg-[#1A1C1F] text-secondary" :
-                            agent.risk === "Med" ? "bg-[#1A1C1F] text-secondary" :
-                            "bg-tertiary/10 text-tertiary border border-tertiary/20"
-                          }`}>
-                            {agent.risk}
-                          </span>
-                        </td>
-                        <td className="py-4 pl-4 text-right">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            isSuspended ? "bg-[#1A1C1F] text-secondary" : "bg-[#4ade80]/10 text-[#4ade80]"
-                          }`}>
-                            {agent.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td className={`py-4 px-4 text-right ${isNegativeRoi ? "text-error" : "text-[#4ade80]"}`}>
+                            {agent.roi[timeframe]}
+                          </td>
+                          <td className={`py-4 px-4 text-right ${isSuspended ? "text-secondary" : "text-white"}`}>
+                            {agent.executions}
+                          </td>
+                          <td className={`py-4 px-4 text-right ${isSuspended ? "text-secondary" : "text-white"}`}>
+                            {agent.successRate}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <span
+                              className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-widest inline-block w-16 ${
+                                agent.risk === "Low"
+                                  ? "bg-[#1A1C1F] text-secondary"
+                                  : agent.risk === "Med"
+                                    ? "bg-[#1A1C1F] text-secondary"
+                                    : "bg-tertiary/10 text-tertiary border border-tertiary/20"
+                              }`}
+                            >
+                              {agent.risk}
+                            </span>
+                          </td>
+                          <td className="py-4 pl-4 text-right">
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                isSuspended ? "bg-[#1A1C1F] text-secondary" : "bg-[#4ade80]/10 text-[#4ade80]"
+                              }`}
+                            >
+                              {agent.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
 
-            {/* Footer Pagination */}
             <div className="px-6 py-4 border-t border-[rgba(255,255,255,0.04)] flex justify-between items-center bg-transparent">
-              <button 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              <button
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage === 1}
                 className="text-sm text-secondary hover:text-white transition-colors flex items-center gap-1 font-body disabled:opacity-50 disabled:hover:text-secondary disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-[16px]">chevron_left</span> Prev
               </button>
               <div className="flex gap-1 font-body text-sm tabular-nums">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button 
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                  <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
                     className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                      currentPage === page 
-                        ? "bg-[#1A1C1F] text-white" 
+                      currentPage === page
+                        ? "bg-[#1A1C1F] text-white"
                         : "hover:bg-[#1A1C1F] text-secondary hover:text-white"
                     }`}
                   >
@@ -240,8 +355,8 @@ export default function LeaderboardPage() {
                   </button>
                 ))}
               </div>
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              <button
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                 disabled={currentPage === totalPages}
                 className="text-sm text-secondary hover:text-white transition-colors flex items-center gap-1 font-body disabled:opacity-50 disabled:hover:text-secondary disabled:cursor-not-allowed"
               >

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, ReactNode, useEffect, useState } from "react";
 import { useAccount, useDisconnect } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
+import { openWalletModal } from "@/lib/appkit";
 
 interface WalletContextType {
   address: string | null;
@@ -15,7 +15,6 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount();
-  const { open } = useAppKit();
   const { disconnect } = useDisconnect();
 
   // Hydration safety to prevent hydration mismatch
@@ -26,7 +25,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     <WalletContext.Provider value={{
       address: mounted && isConnected && address ? address : null,
       isConnected: mounted ? isConnected : false,
-      connectWallet: () => open(),
+      connectWallet: () => openWalletModal(),
       disconnectWallet: () => disconnect()
     }}>
       {children}
