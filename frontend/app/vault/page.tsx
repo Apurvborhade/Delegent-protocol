@@ -1,19 +1,139 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { useWallet } from "@/context/WalletContext";
+import { api, type ProposalResponse, type VaultSignalResponse } from "@/lib/api";
+
+type PendingApproval = {
+  id: string;
+  name: string;
+  agent: string;
+  apy: string;
+};
+
+type TransactionRow = {
+  id: string;
+  type: string;
+  asset: string;
+  amount: string;
+  amountClassName: string;
+  status: string;
+  statusClassName: string;
+  date: string;
+};
+
+function toNumber(value: string | number | undefined | null) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (!value) {
+    return 0;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrency(value: number) {
+  return `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function mapStatusBadge(status: VaultSignalResponse["status"]) {
+  if (status === "ready-for-strategy") {
+    return {
+      text: "Confirmed",
+      className: "bg-[#4ade80]/10 text-[#4ade80]",
+      type: "Strategy Allocation",
+    };
+  }
+  if (status === "vault-funded") {
+    return {
+      text: "Pending",
+      className: "bg-tertiary/10 text-tertiary",
+      type: "Deposit",
+    };
+  }
+  return {
+    text: "Pending",
+    className: "bg-tertiary/10 text-tertiary",
+    type: "Vault Created",
+  };
+}
+
+function buildPendingApprovals(proposals: ProposalResponse[] | undefined): PendingApproval[] {
+  if (!proposals?.length) {
+    return [];
+  }
+
+  return proposals
+    .filter((proposal) => proposal.status === "pending")
+    .map((proposal) => ({
+      id: proposal.id,
+      name: proposal.title,
+      agent: proposal.proposerAgentId,
+      apy: `${(proposal.expectedApyBps / 100).toFixed(1)}% APY`,
+    }));
+}
+
+function buildTransactionRows(signals: VaultSignalResponse[] | undefined): TransactionRow[] {
+  if (!signals?.length) {
+    return [];
+  }
+
+  return [...signals]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((signal) => {
+      const amount = toNumber(signal.fundedAmount);
+      const badge = mapStatusBadge(signal.status);
+      return {
+        id: signal.id,
+        type: badge.type,
+        asset: signal.assetSymbol || "-",
+        amount: `${amount >= 0 ? "+" : ""}${amount.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`,
+        amountClassName: amount >= 0 ? "text-white" : "text-error",
+        status: badge.text,
+        statusClassName: badge.className,
+        date: formatDate(signal.createdAt),
+      };
+    });
+}
 
 export default function VaultPage() {
+  const { address, isConnected } = useWallet();
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("1000.00");
-  const [balance, setBalance] = useState(10247.38);
+  const [balanceDelta, setBalanceDelta] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [selectedToken, setSelectedToken] = useState({ symbol: "USDC", color: "bg-primary/20", textClass: "text-primary" });
-  
+  const [selectedToken, setSelectedToken] = useState({
+    symbol: "USDC",
+    color: "bg-primary/20",
+    textClass: "text-primary",
+  });
+
   const tokens = [
     { symbol: "USDC", color: "bg-primary/20", textClass: "text-primary" },
     { symbol: "ETH", color: "bg-[#627eea]/20", textClass: "text-[#627eea]" },
@@ -21,6 +141,51 @@ export default function VaultPage() {
   ];
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const vaultBalanceQuery = useQuery({
+    queryKey: ["vault-balance", address],
+    queryFn: () => api.getVaultBalance(address as string),
+    enabled: isConnected && !!address,
+    staleTime: 30_000,
+  });
+
+  const vaultSignalsQuery = useQuery({
+    queryKey: ["vault-signals", address],
+    queryFn: () => api.getVaultSignals({ ownerAddress: address as string }),
+    enabled: isConnected && !!address,
+    staleTime: 30_000,
+  });
+
+  const proposalsQuery = useQuery({
+    queryKey: ["proposals", address],
+    queryFn: () => api.getProposals(address as string),
+    enabled: isConnected && !!address,
+    staleTime: 30_000,
+  });
+
+  const pendingApprovals = useMemo(
+    () => buildPendingApprovals(proposalsQuery.data?.proposals),
+    [proposalsQuery.data?.proposals],
+  );
+
+  const transactionRows = useMemo(
+    () => buildTransactionRows(vaultSignalsQuery.data),
+    [vaultSignalsQuery.data],
+  );
+
+  const allocated = useMemo(() => {
+    if (!vaultSignalsQuery.data?.length) {
+      return 0;
+    }
+    return vaultSignalsQuery.data
+      .filter((signal) => signal.status === "ready-for-strategy")
+      .reduce((sum, signal) => sum + toNumber(signal.fundedAmount), 0);
+  }, [vaultSignalsQuery.data]);
+
+  const baseBalance = toNumber(vaultBalanceQuery.data?.balance);
+  const balance = baseBalance + balanceDelta;
+
+  const allocatedPercent = balance > 0 ? Math.min((allocated / balance) * 100, 100) : 0;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -31,28 +196,31 @@ export default function VaultPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-  
-  const [pendingApprovals, setPendingApprovals] = useState([
-    {
-      id: 1,
-      name: "Aave USDC Leveraged Yield",
-      agent: "Agent Alpha",
-      apy: "12.4% APY",
-    },
-    {
-      id: 2,
-      name: "Curve 3Pool Optimization",
-      agent: "Agent Beta",
-      apy: "8.2% APY",
-    },
-  ]);
+
+  useEffect(() => {
+    if (vaultBalanceQuery.error) {
+      console.error("Failed to fetch vault balance", vaultBalanceQuery.error);
+    }
+  }, [vaultBalanceQuery.error]);
+
+  useEffect(() => {
+    if (vaultSignalsQuery.error) {
+      console.error("Failed to fetch vault signals", vaultSignalsQuery.error);
+    }
+  }, [vaultSignalsQuery.error]);
+
+  useEffect(() => {
+    if (proposalsQuery.error) {
+      console.error("Failed to fetch proposals", proposalsQuery.error);
+    }
+  }, [proposalsQuery.error]);
 
   const handleAction = () => {
     setError("");
     setSuccess("");
     const numAmount = parseFloat(amount);
 
-    if (!amount || isNaN(numAmount)) {
+    if (!amount || Number.isNaN(numAmount)) {
       setError("Please enter a valid amount.");
       return;
     }
@@ -68,22 +236,20 @@ export default function VaultPage() {
     }
 
     if (mode === "deposit") {
-      setBalance((prev) => prev + numAmount);
+      setBalanceDelta((prev) => prev + numAmount);
       setSuccess(`Successfully deposited $${numAmount.toFixed(2)} ${selectedToken.symbol}`);
     } else {
-      setBalance((prev) => prev - numAmount);
+      setBalanceDelta((prev) => prev - numAmount);
       setSuccess(`Successfully withdrew $${numAmount.toFixed(2)} ${selectedToken.symbol}`);
     }
   };
 
-  const handleApprove = (id: number) => {
+  const handleApprove = (id: string) => {
     console.log(`Approved strategy ${id}`);
-    setPendingApprovals((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleReject = (id: number) => {
+  const handleReject = (id: string) => {
     console.log(`Rejected strategy ${id}`);
-    setPendingApprovals((prev) => prev.filter((item) => item.id !== id));
   };
 
   return (
@@ -92,35 +258,47 @@ export default function VaultPage() {
       <main className="flex-1 ml-0 md:ml-[220px] flex flex-col min-h-screen">
         <Topbar variant="vault" />
         <div className="p-8 flex flex-col gap-8 max-w-7xl mx-auto w-full">
-          {/* Row 1: Key Metrics Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-surface p-6 rounded-[16px] flex flex-col justify-between border-l-2 border-primary-container">
               <span className="text-secondary text-sm font-medium mb-4">Total Balance</span>
-              <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">$10,247.38</div>
+              <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">
+                {vaultBalanceQuery.isLoading ? "Loading..." : formatCurrency(balance)}
+              </div>
             </div>
             <div className="bg-surface p-6 rounded-[16px] flex flex-col justify-between relative overflow-hidden">
               <div className="absolute right-0 bottom-0 w-32 h-32 bg-primary/5 rounded-tl-full -mr-8 -mb-8"></div>
               <span className="text-secondary text-sm font-medium mb-4 relative z-10">Allocated</span>
               <div className="flex items-baseline gap-3 relative z-10">
-                <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">$8,100.00</div>
-                <span className="text-xs text-secondary">79.1% of vault</span>
+                <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">
+                  {vaultSignalsQuery.isLoading ? "Loading..." : formatCurrency(allocated)}
+                </div>
+                <span className="text-xs text-secondary">{allocatedPercent.toFixed(1)}% of vault</span>
               </div>
             </div>
             <div className="bg-surface p-6 rounded-[16px] flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-secondary text-sm font-medium">Pending Approvals</span>
-                <div className={`w-2.5 h-2.5 rounded-full bg-tertiary ${pendingApprovals.length > 0 ? "animate-pulse" : ""}`}></div>
+                <div
+                  className={`w-2.5 h-2.5 rounded-full bg-tertiary ${
+                    pendingApprovals.length > 0 ? "animate-pulse" : ""
+                  }`}
+                ></div>
               </div>
-              <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">{pendingApprovals.length}</div>
+              <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">
+                {proposalsQuery.isLoading ? "..." : pendingApprovals.length}
+              </div>
             </div>
           </div>
 
-          {/* Row 2: Deposit / Withdraw & Pending Approvals List */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-4 bg-surface rounded-[16px] p-6 flex flex-col gap-6">
               <div className="flex p-1 bg-surface-container-low rounded-lg">
                 <button
-                  onClick={() => { setMode("deposit"); setError(""); setSuccess(""); }}
+                  onClick={() => {
+                    setMode("deposit");
+                    setError("");
+                    setSuccess("");
+                  }}
                   className={`flex-1 py-2 text-sm font-medium transition-all ${
                     mode === "deposit"
                       ? "text-white bg-surface-container rounded-md shadow-sm"
@@ -130,7 +308,11 @@ export default function VaultPage() {
                   Deposit
                 </button>
                 <button
-                  onClick={() => { setMode("withdraw"); setError(""); setSuccess(""); }}
+                  onClick={() => {
+                    setMode("withdraw");
+                    setError("");
+                    setSuccess("");
+                  }}
                   className={`flex-1 py-2 text-sm font-medium transition-all ${
                     mode === "withdraw"
                       ? "text-white bg-surface-container rounded-md shadow-sm"
@@ -143,11 +325,13 @@ export default function VaultPage() {
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
                   <div className="relative" ref={dropdownRef}>
-                    <button 
+                    <button
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                       className="flex items-center gap-2 bg-surface-container-low border border-[rgba(67,70,84,0.15)] rounded-lg px-4 py-3 hover:bg-surface-container transition-colors active:scale-95"
                     >
-                      <div className={`w-6 h-6 rounded-full ${selectedToken.color} flex items-center justify-center text-[10px] font-bold ${selectedToken.textClass}`}>
+                      <div
+                        className={`w-6 h-6 rounded-full ${selectedToken.color} flex items-center justify-center text-[10px] font-bold ${selectedToken.textClass}`}
+                      >
                         {selectedToken.symbol}
                       </div>
                       <span className="font-medium text-sm w-8 text-left">{selectedToken.symbol}</span>
@@ -165,7 +349,9 @@ export default function VaultPage() {
                             }}
                             className="w-full flex items-center gap-2 px-4 py-3 hover:bg-surface-container transition-colors text-left"
                           >
-                            <div className={`w-6 h-6 rounded-full ${token.color} flex items-center justify-center text-[10px] font-bold ${token.textClass}`}>
+                            <div
+                              className={`w-6 h-6 rounded-full ${token.color} flex items-center justify-center text-[10px] font-bold ${token.textClass}`}
+                            >
                               {token.symbol}
                             </div>
                             <span className="font-medium text-sm text-white">{token.symbol}</span>
@@ -190,7 +376,10 @@ export default function VaultPage() {
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-secondary">
-                    Vault Balance: <span className="text-white tabular-nums">${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    Vault Balance:{" "}
+                    <span className="text-white tabular-nums">
+                      {vaultBalanceQuery.isLoading ? "Loading..." : formatCurrency(balance)}
+                    </span>
                   </span>
                   <button
                     onClick={() => {
@@ -204,7 +393,7 @@ export default function VaultPage() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="flex flex-col gap-2 mt-auto">
                 {error && <p className="text-error text-xs text-center">{error}</p>}
                 {success && <p className="text-[#4ade80] text-xs text-center">{success}</p>}
@@ -219,7 +408,15 @@ export default function VaultPage() {
 
             <div className="lg:col-span-8 bg-surface rounded-[16px] p-6 flex flex-col">
               <h3 className="text-sm font-medium text-secondary mb-6 tracking-wide">PENDING APPROVALS</h3>
-              {pendingApprovals.length === 0 ? (
+              {proposalsQuery.isLoading ? (
+                <div className="text-sm text-secondary flex-1 flex items-center justify-center min-h-[150px]">
+                  Loading pending approvals...
+                </div>
+              ) : proposalsQuery.isError ? (
+                <div className="text-sm text-secondary flex-1 flex items-center justify-center min-h-[150px]">
+                  Unable to load pending approvals.
+                </div>
+              ) : pendingApprovals.length === 0 ? (
                 <div className="text-sm text-secondary flex-1 flex items-center justify-center min-h-[150px]">
                   No pending approvals.
                 </div>
@@ -258,7 +455,6 @@ export default function VaultPage() {
             </div>
           </div>
 
-          {/* Row 4: Transaction History */}
           <div className="bg-surface rounded-[16px] p-6">
             <h3 className="text-sm font-medium text-secondary mb-6 tracking-wide">TRANSACTION HISTORY</h3>
             <div className="w-full overflow-x-auto">
@@ -273,51 +469,46 @@ export default function VaultPage() {
                   </tr>
                 </thead>
                 <tbody className="text-sm">
-                  <tr className="hover:bg-surface-container-low transition-colors group">
-                    <td className="py-4 font-medium text-white">Deposit</td>
-                    <td className="py-4 text-secondary">USDC</td>
-                    <td className="py-4 text-right tabular-nums text-white">+5,000.00</td>
-                    <td className="py-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[#4ade80]/10 text-[#4ade80]">Confirmed</span>
-                    </td>
-                    <td className="py-4 text-right text-secondary tabular-nums">Oct 24, 14:32</td>
-                  </tr>
-                  <tr className="hover:bg-surface-container-low transition-colors group">
-                    <td className="py-4 font-medium text-white">Strategy Allocation</td>
-                    <td className="py-4 text-secondary">ETH</td>
-                    <td className="py-4 text-right tabular-nums text-white">-2.50</td>
-                    <td className="py-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-tertiary/10 text-tertiary">Pending</span>
-                    </td>
-                    <td className="py-4 text-right text-secondary tabular-nums">Oct 23, 09:15</td>
-                  </tr>
-                  <tr className="hover:bg-surface-container-low transition-colors group">
-                    <td className="py-4 font-medium text-white">Withdraw</td>
-                    <td className="py-4 text-secondary">USDT</td>
-                    <td className="py-4 text-right tabular-nums text-white">-1,200.00</td>
-                    <td className="py-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[#4ade80]/10 text-[#4ade80]">Confirmed</span>
-                    </td>
-                    <td className="py-4 text-right text-secondary tabular-nums">Oct 21, 11:45</td>
-                  </tr>
-                  <tr className="hover:bg-surface-container-low transition-colors group">
-                    <td className="py-4 font-medium text-white">Deposit</td>
-                    <td className="py-4 text-secondary">DAI</td>
-                    <td className="py-4 text-right tabular-nums text-white">+3,500.00</td>
-                    <td className="py-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-error/10 text-error">Failed</span>
-                    </td>
-                    <td className="py-4 text-right text-secondary tabular-nums">Oct 19, 16:20</td>
-                  </tr>
-                  <tr className="hover:bg-surface-container-low transition-colors group">
-                    <td className="py-4 font-medium text-white">Strategy Yield</td>
-                    <td className="py-4 text-secondary">USDC</td>
-                    <td className="py-4 text-right tabular-nums text-[#4ade80]">+142.38</td>
-                    <td className="py-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[#4ade80]/10 text-[#4ade80]">Confirmed</span>
-                    </td>
-                    <td className="py-4 text-right text-secondary tabular-nums">Oct 18, 00:01</td>
-                  </tr>
+                  {vaultSignalsQuery.isLoading && (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-secondary">
+                        Loading transactions...
+                      </td>
+                    </tr>
+                  )}
+                  {vaultSignalsQuery.isError && (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-secondary">
+                        Unable to load transactions.
+                      </td>
+                    </tr>
+                  )}
+                  {!vaultSignalsQuery.isLoading &&
+                    !vaultSignalsQuery.isError &&
+                    transactionRows.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-secondary">
+                          No transaction activity yet.
+                        </td>
+                      </tr>
+                    )}
+                  {!vaultSignalsQuery.isLoading &&
+                    !vaultSignalsQuery.isError &&
+                    transactionRows.map((row) => (
+                      <tr key={row.id} className="hover:bg-surface-container-low transition-colors group">
+                        <td className="py-4 font-medium text-white">{row.type}</td>
+                        <td className="py-4 text-secondary">{row.asset}</td>
+                        <td className={`py-4 text-right tabular-nums ${row.amountClassName}`}>{row.amount}</td>
+                        <td className="py-4 text-center">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${row.statusClassName}`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="py-4 text-right text-secondary tabular-nums">{row.date}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
