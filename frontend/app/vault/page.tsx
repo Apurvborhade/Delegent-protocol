@@ -1,7 +1,65 @@
+"use client";
+
+import { useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 
 export default function VaultPage() {
+  const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
+  const [amount, setAmount] = useState("1000.00");
+  const [balance] = useState(10247.38);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  
+  const [pendingApprovals, setPendingApprovals] = useState([
+    {
+      id: 1,
+      name: "Aave USDC Leveraged Yield",
+      agent: "Agent Alpha",
+      apy: "12.4% APY",
+    },
+    {
+      id: 2,
+      name: "Curve 3Pool Optimization",
+      agent: "Agent Beta",
+      apy: "8.2% APY",
+    },
+  ]);
+
+  const handleAction = () => {
+    setError("");
+    setSuccess("");
+    const numAmount = parseFloat(amount);
+
+    if (!amount || isNaN(numAmount)) {
+      setError("Please enter a valid amount.");
+      return;
+    }
+
+    if (numAmount <= 0) {
+      setError("Amount must be greater than 0.");
+      return;
+    }
+
+    if (mode === "withdraw" && numAmount > balance) {
+      setError("Insufficient balance.");
+      return;
+    }
+
+    console.log(`Executing ${mode} for amount: ${numAmount}`);
+    setSuccess(`Successfully ${mode === "deposit" ? "deposited" : "withdrew"} $${numAmount.toFixed(2)}`);
+  };
+
+  const handleApprove = (id: number) => {
+    console.log(`Approved strategy ${id}`);
+    setPendingApprovals((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleReject = (id: number) => {
+    console.log(`Rejected strategy ${id}`);
+    setPendingApprovals((prev) => prev.filter((item) => item.id !== id));
+  };
+
   return (
     <div className="bg-surface-container-lowest text-on-surface font-body antialiased min-h-screen flex">
       <Sidebar active="vault" variant="default" />
@@ -25,9 +83,9 @@ export default function VaultPage() {
             <div className="bg-surface p-6 rounded-[16px] flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-secondary text-sm font-medium">Pending Approvals</span>
-                <div className="w-2.5 h-2.5 rounded-full bg-tertiary animate-pulse"></div>
+                <div className={`w-2.5 h-2.5 rounded-full bg-tertiary ${pendingApprovals.length > 0 ? "animate-pulse" : ""}`}></div>
               </div>
-              <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">2</div>
+              <div className="text-[28px] font-bold text-white tabular-nums tracking-tight">{pendingApprovals.length}</div>
             </div>
           </div>
 
@@ -35,8 +93,26 @@ export default function VaultPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-4 bg-surface rounded-[16px] p-6 flex flex-col gap-6">
               <div className="flex p-1 bg-surface-container-low rounded-lg">
-                <button className="flex-1 py-2 text-sm font-medium text-white bg-surface-container rounded-md shadow-sm transition-all">Deposit</button>
-                <button className="flex-1 py-2 text-sm font-medium text-secondary hover:text-white transition-colors">Withdraw</button>
+                <button
+                  onClick={() => { setMode("deposit"); setError(""); setSuccess(""); }}
+                  className={`flex-1 py-2 text-sm font-medium transition-all ${
+                    mode === "deposit"
+                      ? "text-white bg-surface-container rounded-md shadow-sm"
+                      : "text-secondary hover:text-white"
+                  }`}
+                >
+                  Deposit
+                </button>
+                <button
+                  onClick={() => { setMode("withdraw"); setError(""); setSuccess(""); }}
+                  className={`flex-1 py-2 text-sm font-medium transition-all ${
+                    mode === "withdraw"
+                      ? "text-white bg-surface-container rounded-md shadow-sm"
+                      : "text-secondary hover:text-white"
+                  }`}
+                >
+                  Withdraw
+                </button>
               </div>
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4">
@@ -46,47 +122,86 @@ export default function VaultPage() {
                     <span className="material-symbols-outlined text-[16px] text-secondary">expand_more</span>
                   </button>
                   <div className="flex-1 relative">
-                    <input className="w-full bg-surface-container-lowest border border-[rgba(67,70,84,0.15)] rounded-lg px-4 py-3 text-right text-white font-medium tabular-nums focus:border-primary/100 focus:ring-0 transition-colors" placeholder="0.00" type="text" defaultValue="1000.00" />
+                    <input
+                      value={amount}
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        setError("");
+                        setSuccess("");
+                      }}
+                      className="w-full bg-surface-container-lowest border border-[rgba(67,70,84,0.15)] rounded-lg px-4 py-3 text-right text-white font-medium tabular-nums focus:border-primary/100 focus:ring-0 transition-colors"
+                      placeholder="0.00"
+                      type="text"
+                    />
                   </div>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-secondary">Vault Balance: <span className="text-white tabular-nums">$10,247.38</span></span>
-                  <button className="text-primary hover:text-primary-container font-medium transition-colors">Max</button>
+                  <span className="text-secondary">
+                    Vault Balance: <span className="text-white tabular-nums">${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      setAmount(balance.toString());
+                      setError("");
+                      setSuccess("");
+                    }}
+                    className="text-primary hover:text-primary-container font-medium transition-colors active:scale-95"
+                  >
+                    Max
+                  </button>
                 </div>
               </div>
-              <button className="w-full bg-primary text-on-primary font-bold py-3.5 rounded-[12px] hover:bg-primary-fixed-dim transition-colors mt-auto">Deposit</button>
+              
+              <div className="flex flex-col gap-2 mt-auto">
+                {error && <p className="text-error text-xs text-center">{error}</p>}
+                {success && <p className="text-[#4ade80] text-xs text-center">{success}</p>}
+                <button
+                  onClick={handleAction}
+                  className="w-full bg-primary text-on-primary font-bold py-3.5 rounded-[12px] hover:bg-primary-fixed-dim transition-colors active:scale-[0.98]"
+                >
+                  {mode === "deposit" ? "Deposit" : "Withdraw"}
+                </button>
+              </div>
             </div>
 
             <div className="lg:col-span-8 bg-surface rounded-[16px] p-6 flex flex-col">
               <h3 className="text-sm font-medium text-secondary mb-6 tracking-wide">PENDING APPROVALS</h3>
-              <div className="flex flex-col gap-3">
-                <div className="bg-surface-container-low hover:bg-surface-container p-4 rounded-[12px] flex items-center justify-between transition-colors border-l-2 border-tertiary">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-sm font-bold text-white">Aave USDC Leveraged Yield</span>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-secondary">Agent Alpha</span>
-                      <span className="text-[#4ade80] font-medium tabular-nums">12.4% APY</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="px-4 py-1.5 border border-error/30 text-error rounded-md text-xs font-medium hover:bg-error/10 transition-colors">Reject</button>
-                    <button className="px-4 py-1.5 border border-[#4ade80]/30 text-[#4ade80] rounded-md text-xs font-medium hover:bg-[#4ade80]/10 transition-colors">Approve</button>
-                  </div>
+              {pendingApprovals.length === 0 ? (
+                <div className="text-sm text-secondary flex-1 flex items-center justify-center min-h-[150px]">
+                  No pending approvals.
                 </div>
-                <div className="bg-surface-container-low hover:bg-surface-container p-4 rounded-[12px] flex items-center justify-between transition-colors border-l-2 border-tertiary">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-sm font-bold text-white">Curve 3Pool Optimization</span>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-secondary">Agent Beta</span>
-                      <span className="text-[#4ade80] font-medium tabular-nums">8.2% APY</span>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {pendingApprovals.map((approval) => (
+                    <div
+                      key={approval.id}
+                      className="bg-surface-container-low hover:bg-surface-container p-4 rounded-[12px] flex items-center justify-between transition-colors border-l-2 border-tertiary"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-bold text-white">{approval.name}</span>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-secondary">{approval.agent}</span>
+                          <span className="text-[#4ade80] font-medium tabular-nums">{approval.apy}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleReject(approval.id)}
+                          className="px-4 py-1.5 border border-error/30 text-error rounded-md text-xs font-medium hover:bg-error/10 transition-colors active:scale-95"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => handleApprove(approval.id)}
+                          className="px-4 py-1.5 border border-[#4ade80]/30 text-[#4ade80] rounded-md text-xs font-medium hover:bg-[#4ade80]/10 transition-colors active:scale-95"
+                        >
+                          Approve
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="px-4 py-1.5 border border-error/30 text-error rounded-md text-xs font-medium hover:bg-error/10 transition-colors">Reject</button>
-                    <button className="px-4 py-1.5 border border-[#4ade80]/30 text-[#4ade80] rounded-md text-xs font-medium hover:bg-[#4ade80]/10 transition-colors">Approve</button>
-                  </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
