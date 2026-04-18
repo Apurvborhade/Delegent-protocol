@@ -8,6 +8,9 @@ export interface AgentIdentityResponse {
   agentAddress: string;
   registryAgentId?: string;
   agentUri?: string;
+  name?: string;
+  description?: string;
+  skills?: string[];
   verifiedWallet?: string;
   metadata?: Record<string, unknown>;
   identityDocument?: {
@@ -97,6 +100,32 @@ export interface FeedbackSummaryResponse {
   positiveFeedback: number;
   negativeFeedback: number;
   source: "onchain" | "mock";
+}
+
+export interface AgentDirectoryEntry {
+  agentId: string;
+  agentType: "strategy" | "user";
+  agentAddress: string;
+  registryAgentId?: string;
+  agentUri?: string;
+  verifiedWallet?: string;
+  skills: string[];
+  description?: string;
+  name?: string;
+  metadata?: Record<string, unknown>;
+  identityDocument?: Record<string, unknown>;
+  identityUpload?: {
+    uri: string;
+    gatewayUrl?: string;
+    cid: string;
+    source: "pinata" | "generic-ipfs" | "mock";
+  };
+  registeredAt: string;
+  reputation: ReputationResponse;
+}
+
+export interface AgentDirectoryResponse {
+  agents: AgentDirectoryEntry[];
 }
 
 function getApiBaseUrl() {
@@ -191,7 +220,10 @@ async function requestWithFallback<T>(
 export const api = {
   async getAgentIdentity(agent: string) {
     try {
-      return await requestJson<AgentIdentityResponse>(`/agents/${agent}/identity`);
+      return await requestWithFallback<AgentIdentityResponse>([
+        `/agents/${agent}/identity`,
+        `/agent-identity/${agent}`,
+      ]);
     } catch (error) {
       return {
         agentAddress: agent,
@@ -210,7 +242,7 @@ export const api = {
   async getVaultBalance(vault: string, asset?: string) {
     try {
       return await requestWithFallback<VaultBalanceResponse>(
-        [`/read/vault-balance/${vault}`, `/vault-balance/${vault}`],
+        [`/vault-balance/${vault}`],
         undefined,
         { asset },
       );
@@ -226,7 +258,7 @@ export const api = {
   async getVaultSignals(filters?: { ownerAddress?: string; vaultAddress?: string }) {
     try {
       return await requestWithFallback<VaultSignalResponse[]>(
-        ["/read/vault-signals", "/vault-signals"],
+        ["/vault-signals"],
         undefined,
         {
           ownerAddress: filters?.ownerAddress,
@@ -248,9 +280,7 @@ export const api = {
 
   async getReputation(agent: string) {
     try {
-      return await requestWithFallback<ReputationResponse>(
-        [`/read/reputation/${agent}`, `/reputation/${agent}`],
-      );
+      return await requestWithFallback<ReputationResponse>([`/reputation/${agent}`]);
     } catch (error) {
       return {
         agentAddress: agent,
@@ -258,6 +288,14 @@ export const api = {
         tier: "rookie",
         source: "mock",
       };
+    }
+  },
+
+  async getAgentsDirectory() {
+    try {
+      return await requestWithFallback<AgentDirectoryResponse>(["/agents"]);
+    } catch (error) {
+      return { agents: [] };
     }
   },
 

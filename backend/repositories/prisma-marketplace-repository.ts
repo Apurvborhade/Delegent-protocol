@@ -89,6 +89,14 @@ export class PrismaMarketplaceRepository implements MarketplaceRepository {
     return row ? mapAgent(row) : undefined;
   }
 
+  async listAgents() {
+    const rows = await this.client.agent.findMany({
+      orderBy: { registeredAt: "desc" },
+    });
+
+    return rows.map(mapAgent);
+  }
+
   async saveProposal(proposal: StrategyProposal) {
     const inferredAgentType = proposal.proposerAgentId.toLowerCase().includes("user")
       ? "user"

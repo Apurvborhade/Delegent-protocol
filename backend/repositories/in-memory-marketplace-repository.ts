@@ -31,6 +31,10 @@ export class InMemoryMarketplaceRepository implements MarketplaceRepository {
     return [...this.agents.values()].find((agent) => agent.agentAddress.toLowerCase() === address.toLowerCase());
   }
 
+  async listAgents() {
+    return [...this.agents.values()].sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+  }
+
   async saveProposal(proposal: StrategyProposal) {
     this.proposals.set(proposal.id, proposal);
     return proposal;

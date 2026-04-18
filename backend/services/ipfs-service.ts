@@ -193,3 +193,54 @@ function buildGatewayUrl(cid: string) {
   const gateway = process.env.IPFS_GATEWAY ?? "https://gateway.pinata.cloud/ipfs";
   return `${gateway.replace(/\/$/, "")}/${cid}`;
 }
+
+function resolveAgentUriToHttp(agentUri: string) {
+  if (agentUri.startsWith("http://") || agentUri.startsWith("https://")) {
+    return agentUri;
+  }
+
+  if (!agentUri.startsWith("ipfs://")) {
+    return undefined;
+  }
+
+  const withoutScheme = agentUri.slice("ipfs://".length);
+  const [cid, ...rest] = withoutScheme.split("/");
+  if (!cid) {
+    return undefined;
+  }
+
+  const suffix = rest.length ? `/${rest.join("/")}` : "";
+  return `${buildGatewayUrl(cid)}${suffix}`;
+}
+
+export async function fetchIdentityDocumentFromUri(agentUri?: string) {
+  if (!agentUri) {
+    return undefined;
+  }
+
+  const uri = resolveAgentUriToHttp(agentUri);
+  if (!uri) {
+    return undefined;
+  }
+
+  try {
+    const response = await fetch(uri, {
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      return undefined;
+    }
+
+    const body = (await response.json()) as unknown;
+    if (!body || typeof body !== "object") {
+      return undefined;
+    }
+
+    return body as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}

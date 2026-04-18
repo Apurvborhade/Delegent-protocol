@@ -12,6 +12,7 @@ export interface MarketplaceRepository {
   saveAgent(agent: AgentRegistration): Promise<AgentRegistration>;
   getAgent(agentId: string): Promise<AgentRegistration | undefined>;
   getAgentByAddress(address: string): Promise<AgentRegistration | undefined>;
+  listAgents(): Promise<AgentRegistration[]>;
   saveProposal(proposal: StrategyProposal): Promise<StrategyProposal>;
   getProposal(proposalId: string): Promise<StrategyProposal | undefined>;
   listProposals(vault: string): Promise<StrategyProposal[]>;

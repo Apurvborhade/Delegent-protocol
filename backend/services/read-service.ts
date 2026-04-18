@@ -11,6 +11,7 @@ import {
   fetchVaultBalance,
   getChainContext,
 } from "./contracts-service.js";
+import { fetchIdentityDocumentFromUri } from "./ipfs-service.js";
 
 export async function getReputation(agentAddress: Address) {
   const stored = await getMarketplaceRepository().getAgentByAddress(agentAddress);
@@ -44,14 +45,77 @@ export async function getAgentIdentity(agent: string) {
   }
 
   const onchain = await fetchAgentIdentity(resolvedAddress as Address, stored?.registryAgentId);
+  const resolvedAgentUri = stored?.agentUri ?? onchain.agentUri;
+  const resolvedIdentityDocument =
+    stored?.identityDocument ??
+    onchain.identityDocument ??
+    (await fetchIdentityDocumentFromUri(resolvedAgentUri));
+  const normalizedName =
+    (resolvedIdentityDocument as { name?: string } | undefined)?.name ??
+    stored?.identityProfile?.name ??
+    stored?.agentId;
+  const normalizedDescription =
+    (resolvedIdentityDocument as { description?: string } | undefined)?.description ??
+    stored?.description;
+  const normalizedSkills =
+    (resolvedIdentityDocument as { skills?: string[] } | undefined)?.skills ?? stored?.skills;
 
   return {
     ...onchain,
-    agentUri: stored?.agentUri ?? onchain.agentUri,
+    agentUri: resolvedAgentUri,
     verifiedWallet: stored?.verifiedWallet ?? onchain.verifiedWallet,
     metadata: stored?.metadata ?? onchain.metadata,
-    identityDocument: stored?.identityDocument,
+    identityDocument: resolvedIdentityDocument,
     identityUpload: stored?.identityUpload,
+    name: normalizedName,
+    description: normalizedDescription,
+    skills: normalizedSkills,
+  };
+}
+
+export async function listAgentsDirectory() {
+  const repository = getMarketplaceRepository();
+  const agents = await repository.listAgents();
+
+  const enriched = await Promise.all(
+    agents.map(async (agent) => {
+      const onchainIdentity = await fetchAgentIdentity(agent.agentAddress as Address, agent.registryAgentId);
+      const resolvedAgentUri = agent.agentUri ?? onchainIdentity.agentUri;
+      const resolvedIdentityDocument =
+        agent.identityDocument ??
+        onchainIdentity.identityDocument ??
+        (await fetchIdentityDocumentFromUri(resolvedAgentUri));
+      const reputation = await fetchReputation(agent.agentAddress as Address, agent.registryAgentId);
+
+      return {
+        agentId: agent.agentId,
+        agentType: agent.agentType,
+        agentAddress: agent.agentAddress,
+        registryAgentId: agent.registryAgentId,
+        agentUri: resolvedAgentUri,
+        verifiedWallet: agent.verifiedWallet ?? onchainIdentity.verifiedWallet,
+        skills:
+          (resolvedIdentityDocument as { skills?: string[] } | undefined)?.skills ??
+          agent.skills ??
+          [],
+        description:
+          (resolvedIdentityDocument as { description?: string } | undefined)?.description ??
+          agent.description,
+        name:
+          (resolvedIdentityDocument as { name?: string } | undefined)?.name ??
+          agent.identityProfile?.name ??
+          agent.agentId,
+        metadata: agent.metadata ?? onchainIdentity.metadata,
+        identityDocument: resolvedIdentityDocument,
+        identityUpload: agent.identityUpload,
+        registeredAt: agent.registeredAt,
+        reputation,
+      };
+    }),
+  );
+
+  return {
+    agents: enriched,
   };
 }
 

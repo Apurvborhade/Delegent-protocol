@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { useWallet } from "@/context/WalletContext";
@@ -12,9 +12,17 @@ type Timeframe = "7D" | "30D" | "90D" | "All Time";
 
 type LeaderboardAgent = {
   id: number;
+  agentId: string;
+  agentType: "strategy" | "user";
   name: string;
+  description?: string;
   address: string;
+  registeredAt: string;
+  metadataSource?: string;
+  registryAgentId?: string;
   reputation: number;
+  reputationTier: "rookie" | "trusted" | "elite";
+  reputationSource: "onchain" | "mock";
   repPercent: number;
   roi: Record<Timeframe, string>;
   executions: number;
@@ -59,13 +67,25 @@ export default function LeaderboardPage() {
     staleTime: 30_000,
   });
 
+  const agentsDirectoryQuery = useQuery({
+    queryKey: ["agents-directory"],
+    queryFn: () => api.getAgentsDirectory(),
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
     if (proposalsQuery.error) {
       console.error("Failed to fetch leaderboard proposals", proposalsQuery.error);
     }
   }, [proposalsQuery.error]);
 
-  const groupedAgents = useMemo(() => {
+  useEffect(() => {
+    if (agentsDirectoryQuery.error) {
+      console.error("Failed to fetch agents directory", agentsDirectoryQuery.error);
+    }
+  }, [agentsDirectoryQuery.error]);
+
+  const proposalStatsByAddress = useMemo(() => {
     const byAddress = new Map<string, ProposalResponse[]>();
     (proposalsQuery.data?.proposals ?? []).forEach((proposal) => {
       const key = proposal.proposerAddress.toLowerCase();
@@ -73,51 +93,40 @@ export default function LeaderboardPage() {
       current.push(proposal);
       byAddress.set(key, current);
     });
-    return [...byAddress.entries()].map(([agentAddress, proposals]) => ({ agentAddress, proposals }));
+    return byAddress;
   }, [proposalsQuery.data?.proposals]);
 
-  const identityQueries = useQueries({
-    queries: groupedAgents.map((agent) => ({
-      queryKey: ["leaderboard-agent-identity", agent.agentAddress],
-      queryFn: () => api.getAgentIdentity(agent.agentAddress),
-      enabled: !!agent.agentAddress,
-      staleTime: 30_000,
-    })),
-  });
-
-  const reputationQueries = useQueries({
-    queries: groupedAgents.map((agent) => ({
-      queryKey: ["leaderboard-agent-reputation", agent.agentAddress],
-      queryFn: () => api.getReputation(agent.agentAddress),
-      enabled: !!agent.agentAddress,
-      staleTime: 30_000,
-    })),
-  });
-
   const leaderboardData = useMemo<LeaderboardAgent[]>(() => {
-    const base = groupedAgents.map((agent, index) => {
-      const identity = identityQueries[index]?.data;
-      const reputation = reputationQueries[index]?.data;
-
-      const apys = agent.proposals.map((proposal) => proposal.expectedApyBps / 100);
+    const base = (agentsDirectoryQuery.data?.agents ?? []).map((agent) => {
+      const proposals = proposalStatsByAddress.get(agent.agentAddress.toLowerCase()) ?? [];
+      const apys = proposals.map((proposal) => proposal.expectedApyBps / 100);
       const avgApy = average(apys);
       const confidence = average(
-        agent.proposals.map((proposal) => (proposal.marketSnapshot.confidence || 0) * 100),
+        proposals.map((proposal) => (proposal.marketSnapshot.confidence || 0) * 100),
       );
-      const riskScores = agent.proposals.map((proposal) => getRiskLabel(proposal.riskLevel));
+      const riskScores = proposals.map((proposal) => getRiskLabel(proposal.riskLevel));
       const highCount = riskScores.filter((risk) => risk === "High").length;
       const medCount = riskScores.filter((risk) => risk === "Med").length;
       const risk: "Low" | "Med" | "High" =
         highCount > medCount && highCount > 0 ? "High" : medCount > 0 ? "Med" : "Low";
 
-      const isSuspended = agent.proposals.every((proposal) => proposal.status !== "pending");
-      const reputationValue = Number.parseFloat(reputation?.score ?? "0");
+      const isSuspended = proposals.length === 0 || proposals.every((proposal) => proposal.status !== "pending");
+      const reputationValue = Number.parseFloat(agent.reputation?.score ?? "0");
 
       return {
-        id: index + 1,
-        name: identity?.identityDocument?.name || agent.proposals[0]?.proposerAgentId || toDisplayAddress(agent.agentAddress),
+        id: 0,
+        agentId: agent.agentId,
+        agentType: agent.agentType,
+        name: agent.name || toDisplayAddress(agent.agentAddress),
+        description: agent.description,
         address: agent.agentAddress,
+        registeredAt: agent.registeredAt,
+        metadataSource:
+          typeof agent.metadata?.source === "string" ? (agent.metadata.source as string) : undefined,
+        registryAgentId: agent.registryAgentId,
         reputation: reputationValue,
+        reputationTier: agent.reputation?.tier ?? "rookie",
+        reputationSource: agent.reputation?.source ?? "mock",
         repPercent: 0,
         roi: {
           "7D": formatRoi(avgApy * 0.25),
@@ -125,8 +134,8 @@ export default function LeaderboardPage() {
           "90D": formatRoi(avgApy * 2.5),
           "All Time": formatRoi(avgApy * 5),
         },
-        executions: agent.proposals.length,
-        successRate: `${Math.min(confidence, 100).toFixed(1)}%`,
+        executions: proposals.length,
+        successRate: `${Math.min(confidence || 0, 100).toFixed(1)}%`,
         risk,
         status: isSuspended ? ("Suspended" as const) : ("Active" as const),
       };
@@ -140,7 +149,7 @@ export default function LeaderboardPage() {
       id: index + 1,
       repPercent: Math.max(Math.min((row.reputation / maxRep) * 100, 100), 0),
     }));
-  }, [groupedAgents, identityQueries, reputationQueries]);
+  }, [agentsDirectoryQuery.data?.agents, proposalStatsByAddress]);
 
   const totalPages = Math.max(1, Math.ceil(leaderboardData.length / itemsPerPage));
   const currentData = useMemo(() => {
@@ -244,29 +253,35 @@ export default function LeaderboardPage() {
                   </tr>
                 </thead>
                 <tbody className="text-sm font-body tabular-nums">
-                  {proposalsQuery.isLoading && (
+                  {(proposalsQuery.isLoading || agentsDirectoryQuery.isLoading) && (
                     <tr>
                       <td colSpan={8} className="py-6 text-center text-secondary">
                         Loading leaderboard...
                       </td>
                     </tr>
                   )}
-                  {proposalsQuery.isError && (
+                  {(proposalsQuery.isError || agentsDirectoryQuery.isError) && (
                     <tr>
                       <td colSpan={8} className="py-6 text-center text-secondary">
                         Unable to load leaderboard data.
                       </td>
                     </tr>
                   )}
-                  {!proposalsQuery.isLoading && !proposalsQuery.isError && currentData.length === 0 && (
+                  {!proposalsQuery.isLoading &&
+                    !agentsDirectoryQuery.isLoading &&
+                    !proposalsQuery.isError &&
+                    !agentsDirectoryQuery.isError &&
+                    currentData.length === 0 && (
                     <tr>
                       <td colSpan={8} className="py-6 text-center text-secondary">
-                        No agents found for this wallet.
+                        No agents found.
                       </td>
                     </tr>
                   )}
                   {!proposalsQuery.isLoading &&
+                    !agentsDirectoryQuery.isLoading &&
                     !proposalsQuery.isError &&
+                    !agentsDirectoryQuery.isError &&
                     currentData.map((agent) => {
                       const isSuspended = agent.status === "Suspended";
                       const isNegativeRoi = agent.roi[timeframe].startsWith("-");
@@ -281,9 +296,23 @@ export default function LeaderboardPage() {
                           <td className={`py-4 pr-4 font-medium ${agent.id <= 3 ? "text-white" : "text-secondary"}`}>
                             {agent.id.toString().padStart(2, "0")}
                           </td>
-                          <td className="py-4 px-4 font-medium text-white flex items-center gap-3">
-                            <div className="w-6 h-6 rounded bg-[#1A1C1F]"></div>
-                            {agent.name}
+                          <td className="py-4 px-4 font-medium text-white">
+                            <div className="flex items-center gap-3">
+                              <div className="w-6 h-6 rounded bg-[#1A1C1F]"></div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="truncate">{agent.name}</span>
+                                <span className="text-xs text-secondary truncate">
+                                  {agent.description || `${agent.agentType} • ${agent.agentId}`}
+                                </span>
+                                <span className="text-[11px] text-secondary truncate">
+                                  {agent.agentType} • {agent.agentId} • {toDisplayAddress(agent.address)}
+                                </span>
+                                <span className="text-[11px] text-secondary truncate">
+                                  Registered {new Date(agent.registeredAt).toLocaleDateString("en-US")}
+                                  {agent.registryAgentId ? ` • Reg# ${agent.registryAgentId.slice(0, 8)}...` : ""}
+                                </span>
+                              </div>
+                            </div>
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-3">
@@ -296,6 +325,13 @@ export default function LeaderboardPage() {
                                   style={{ width: `${agent.repPercent}%` }}
                                 ></div>
                               </div>
+                              <span className="text-[11px] text-secondary uppercase w-16 text-right">
+                                {agent.reputationTier}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-secondary mt-1 text-right">
+                              {agent.reputationSource}
+                              {agent.metadataSource ? ` • ${agent.metadataSource}` : ""}
                             </div>
                           </td>
                           <td className={`py-4 px-4 text-right ${isNegativeRoi ? "text-error" : "text-[#4ade80]"}`}>
