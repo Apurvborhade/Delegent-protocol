@@ -2,18 +2,12 @@
 
 import Link from "next/link";
 import { useWallet } from "@/context/WalletContext";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { AgentSkillCard } from "@/components/connect-wallet/agent-skill-card";
+import { ConnectWalletSplineScene } from "@/components/connect-wallet/spline-scene";
 
 export default function ConnectWalletPage() {
-  const { connectWallet, isConnected } = useWallet();
-  const router = useRouter();
+  const { connectWallet } = useWallet();
 
-  useEffect(() => {
-    if (isConnected) {
-      router.push("/vault");
-    }
-  }, [isConnected, router]);
   return (
     <div className="text-on-surface min-h-screen flex flex-col relative overflow-hidden antialiased selection:bg-surface-variant selection:text-primary bg-[#0A0B0D]">
       {/* TopNavBar */}
@@ -37,30 +31,49 @@ export default function ConnectWalletPage() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-grow flex flex-col items-center justify-center px-6 relative z-10 w-full max-w-[1920px] mx-auto">
-        <div className="w-full max-w-[440px] flex flex-col items-center text-center space-y-10 animate-fade-in">
-          {/* Hero Typography */}
-          <div className="space-y-4 w-full">
-            <h1 className="text-[40px] md:text-[44px] leading-[1.1] font-bold text-primary tracking-tight font-headline">
-              Institutional DeFi.<br/>AI-Executed.
-            </h1>
-            <p className="text-base text-secondary font-body leading-relaxed max-w-[380px] mx-auto">
-              Connect your wallet to access the Propex vault, explore AI strategy agents, and execute yield strategies on-chain.
-            </p>
-          </div>
-          {/* Primary Action */}
-          <div className="w-full space-y-4">
-            {/* Main Connect Button - Tonal Shift Style per Design System */}
-            <button onClick={() => connectWallet()} className="w-full h-[52px] bg-primary text-on-primary font-bold text-[15px] uppercase tracking-wide rounded-[12px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity bg-gradient-to-b from-primary to-primary-container shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
-              <span>Connect Wallet</span>
-              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </button>
-            {/* Trust Metadata */}
-            <div className="flex items-center justify-center gap-1.5 text-[13px] text-secondary font-label uppercase tracking-[0.05em]">
-              <span className="material-symbols-outlined text-[14px]">lock</span>
-              <span>Non-custodial. Your keys, your funds.</span>
+      <main className="relative z-10 flex flex-1 items-center px-6 pb-28 pt-6 sm:px-8 md:px-12 md:pb-32 lg:pb-24">
+        <div className="mx-auto grid min-h-[calc(100vh-168px)] w-full max-w-[1920px] grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16 xl:gap-20">
+          <section className="order-2 flex justify-center lg:order-1 lg:justify-start">
+            <div className="w-full max-w-[440px] space-y-8 text-center lg:ml-[clamp(2rem,7vw,8rem)] lg:text-left">
+              <div className="space-y-4">
+                <h1 className="text-[40px] leading-[1.1] font-bold tracking-tight text-primary font-headline md:text-[44px]">
+                  Institutional DeFi.
+                  <br />
+                  AI-Executed.
+                </h1>
+                <p className="mx-auto max-w-[380px] text-base leading-relaxed text-secondary font-body lg:mx-0">
+                  Connect your wallet to access the Propex vault, explore AI strategy agents, and execute yield strategies on-chain.
+                </p>
+              </div>
+
+              <div className="w-full space-y-4">
+                <button
+                  onClick={() => connectWallet()}
+                  className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[12px] bg-gradient-to-b from-primary to-primary-container bg-primary text-[15px] font-bold tracking-wide text-on-primary uppercase shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-opacity hover:opacity-90"
+                >
+                  <span>Connect Wallet</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    arrow_forward
+                  </span>
+                </button>
+
+                <div className="flex items-center justify-center gap-1.5 text-[13px] text-secondary font-label uppercase tracking-[0.05em] lg:justify-start">
+                  <span className="material-symbols-outlined text-[14px]">
+                    lock
+                  </span>
+                  <span>Non-custodial. Your keys, your funds.</span>
+                </div>
+              </div>
+
+              <AgentSkillCard />
             </div>
-          </div>
+          </section>
+
+          <section className="order-1 flex min-h-[320px] items-center justify-center sm:min-h-[380px] lg:order-2 lg:min-h-[640px]">
+            <div className="flex h-full w-full max-w-[760px] items-center justify-center">
+              <ConnectWalletSplineScene className="h-[320px] sm:h-[380px] md:h-[460px] lg:h-[560px] xl:h-[620px]" />
+            </div>
+          </section>
         </div>
       </main>
 
