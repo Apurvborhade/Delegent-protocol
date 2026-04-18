@@ -16,6 +16,7 @@ import { prepareSubmitProposalPaymentTool } from "./prepare-submit-proposal-paym
 import { submitExecutionTool } from "./submit-execution.js";
 import { submitProposalTool } from "./submit-proposal.js";
 import { submitProposalWithPaymentSignatureTool } from "./submit-proposal-with-payment-signature.js";
+import { transferAgentTokenTool } from "./transfer-agent-token.js";
 import { buildPaymentPayloadFromSignatureTool } from "./build-payment-payload-from-signature.js";
 import type { ToolRequest } from "../../shared/types.js";
 
@@ -28,6 +29,7 @@ export interface ToolModule {
 
 export const toolRegistry: ToolModule[] = [
   registerAgentTool,
+  transferAgentTokenTool,
   getAgentIdentityTool,
   getAgentMetadataTool,
   setAgentWalletTool,

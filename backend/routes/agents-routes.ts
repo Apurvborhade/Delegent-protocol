@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import { getAgentIdentityController, getAgentMetadataController, registerAgentController, setAgentWalletController } from "../controllers/agents-controller.js";
+import {
+  getAgentIdentityController,
+  getAgentMetadataController,
+  registerAgentController,
+  setAgentWalletController,
+  transferAgentTokenController,
+} from "../controllers/agents-controller.js";
 import { asyncHandler } from "../middleware/error-handler.js";
 import { validateBody } from "../validators/validate-body.js";
 
@@ -35,8 +41,15 @@ const walletSchema = z.object({
   }),
 });
 
+const transferTokenSchema = z.object({
+  agentId: z.string().min(1),
+  registryAgentId: z.string().min(1),
+  agentAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+});
+
 export const agentsRouter = Router();
 agentsRouter.post("/register", validateBody(registerSchema), asyncHandler(registerAgentController));
 agentsRouter.post("/wallet", validateBody(walletSchema), asyncHandler(setAgentWalletController));
+agentsRouter.post("/transfer-token", validateBody(transferTokenSchema), asyncHandler(transferAgentTokenController));
 agentsRouter.get("/:agent/identity", asyncHandler(getAgentIdentityController));
 agentsRouter.get("/:registryAgentId/metadata", asyncHandler(getAgentMetadataController));

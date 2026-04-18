@@ -148,6 +148,57 @@ function getRegistryWalletClient() {
   });
 }
 
+async function getFreshRegistryNonce(address: Address) {
+  return registryPublicClient.getTransactionCount({
+    address,
+    blockTag: "pending",
+  });
+}
+
+function isInvalidNonceError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes("invalid nonce");
+}
+
+async function writeRegistryContractWithFreshNonce(input: {
+  walletClient: NonNullable<ReturnType<typeof getRegistryWalletClient>>;
+  abi: readonly unknown[];
+  functionName: string;
+  args?: readonly unknown[];
+  value?: bigint;
+}) {
+  const nonce = await getFreshRegistryNonce(input.walletClient.account.address);
+  const requestConfig = {
+    address: defaultAddresses.identityRegistry,
+    abi: input.abi,
+    functionName: input.functionName,
+    args: input.args,
+    account: input.walletClient.account,
+    value: input.value ?? 0n,
+    nonce,
+  } as const;
+
+  try {
+    const { request } = await registryPublicClient.simulateContract(requestConfig as never);
+    return await input.walletClient.writeContract(request as never);
+  } catch (error) {
+    if (!isInvalidNonceError(error)) {
+      throw error;
+    }
+
+    const retryNonce = await getFreshRegistryNonce(input.walletClient.account.address);
+    return input.walletClient.writeContract({
+      address: defaultAddresses.identityRegistry,
+      abi: input.abi,
+      functionName: input.functionName,
+      args: input.args,
+      account: input.walletClient.account,
+      value: input.value ?? 0n,
+      nonce: retryNonce,
+    } as never);
+  }
+}
+
 function toTier(score: bigint): ReputationRecord["tier"] {
   if (score >= 8_000n) return "elite";
   if (score >= 5_000n) return "trusted";
@@ -183,25 +234,12 @@ export async function registerIdentity(
     };
   }
 
-  let hash: `0x${string}`;
-  try {
-    const { request } = await registryPublicClient.simulateContract({
-      address: defaultAddresses.identityRegistry,
-      abi: agentRegistryAbi,
-      functionName: "register",
-      account: walletClient.account,
-      value: 0n,
-    });
-    hash = await walletClient.writeContract(request);
-  } catch {
-    hash = await walletClient.writeContract({
-      address: defaultAddresses.identityRegistry,
-      abi: agentRegistryAbi,
-      functionName: "register",
-      account: walletClient.account,
-      value: 0n,
-    });
-  }
+  const hash = await writeRegistryContractWithFreshNonce({
+    walletClient,
+    abi: agentRegistryAbi,
+    functionName: "register",
+    value: 0n,
+  });
 
   const registryAgentId = await deriveAgentIdFromReceipt(hash, simulatedRegistryAgentId);
   return {
@@ -211,6 +249,7 @@ export async function registerIdentity(
     notes: [
       "Identity registration submitted to the AgentRegistry contract.",
       "Because this registry mints an NFT on register(), the transaction signer becomes the onchain token owner.",
+      "After registration, call transfer_agent_token on HeLa Testnet to transfer the minted token from the relayer wallet to the target agent address.",
       ...(agentUri ? ["Call setAgentURI next to publish the offchain profile URI."] : []),
       ...(metadata && Object.keys(metadata).length > 0
         ? ["Structured metadata is stored in the offchain identity document rather than onchain key-value slots."]
@@ -233,12 +272,11 @@ export async function setAgentURI(registryAgentId: string, agentUri: string) {
     };
   }
 
-  const hash = await walletClient.writeContract({
-    address: defaultAddresses.identityRegistry,
+  const hash = await writeRegistryContractWithFreshNonce({
+    walletClient,
     abi: agentRegistryAbi,
     functionName: "setAgentURI",
     args: [BigInt(registryAgentId), agentUri],
-    account: walletClient.account,
   });
 
   return {
@@ -284,12 +322,11 @@ export async function transferAgentTokenOwnership(registryAgentId: string, to: A
     };
   }
 
-  const hash = await walletClient.writeContract({
-    address: defaultAddresses.identityRegistry,
+  const hash = await writeRegistryContractWithFreshNonce({
+    walletClient,
     abi: erc721TransferAbi,
     functionName: "transferFrom",
     args: [currentOwner, to, tokenId],
-    account: walletClient.account,
   });
 
   return {
@@ -511,12 +548,11 @@ export async function recordSuccess(agentAddress: Address) {
     };
   }
 
-  const hash = await walletClient.writeContract({
-    address: defaultAddresses.identityRegistry,
+  const hash = await writeRegistryContractWithFreshNonce({
+    walletClient,
     abi: agentRegistryAbi,
     functionName: "updateScore",
     args: [BigInt(registryAgentId), true],
-    account: walletClient.account,
   });
 
   return {

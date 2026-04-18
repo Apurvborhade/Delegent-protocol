@@ -43,7 +43,6 @@ export async function registerAgentOnchain(
 
 export async function finalizeAgentRegistrationOnchain(
   registryAgentId: string,
-  agentAddress: Address,
   agentUri?: string,
   metadata?: Record<string, unknown>,
 ) {
@@ -75,25 +74,14 @@ export async function finalizeAgentRegistrationOnchain(
       )
     : [];
 
-  let ownershipTransfer;
-  try {
-    ownershipTransfer = await transferAgentTokenOwnership(registryAgentId, agentAddress);
-  } catch (error) {
-    ownershipTransfer = {
-      status: "skipped" as const,
-      notes: [
-        `transferAgentTokenOwnership failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      ],
-    };
-  }
-
   return {
     uriWrite,
     metadataWrites,
-    ownershipTransfer,
   };
+}
+
+export async function transferAgentTokenOnchain(registryAgentId: string, agentAddress: Address) {
+  return transferAgentTokenOwnership(registryAgentId, agentAddress);
 }
 
 export async function fetchReputation(agentAddress: Address, registryAgentId?: string): Promise<ReputationRecord> {

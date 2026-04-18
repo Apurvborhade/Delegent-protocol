@@ -1,7 +1,11 @@
 import type { Request, Response } from "express";
 import { sendJson } from "../lib/http.js";
-import { registerAgent, setAgentWalletService } from "../services/agent-service.js";
-import { getAgentIdentity, getAgentMetadataByKey, getFeedbackSummaryForAgent } from "../services/read-service.js";
+import {
+  registerAgent,
+  setAgentWalletService,
+  transferAgentTokenService,
+} from "../services/agent-service.js";
+import { getAgentIdentity, getAgentMetadataByKey } from "../services/read-service.js";
 
 export async function registerAgentController(req: Request, res: Response) {
   const result = await registerAgent(req.body);
@@ -21,5 +25,10 @@ export async function getAgentIdentityController(req: Request, res: Response) {
 
 export async function setAgentWalletController(req: Request, res: Response) {
   const result = await setAgentWalletService(req.body);
+  return sendJson(res, result);
+}
+
+export async function transferAgentTokenController(req: Request, res: Response) {
+  const result = await transferAgentTokenService(req.body);
   return sendJson(res, result);
 }

@@ -1,7 +1,12 @@
 import type { Address, AgentRegistration, AgentWalletProof } from "../../shared/types.js";
 import { getBroker } from "../lib/broker-registry.js";
 import { getMarketplaceRepository } from "../repositories/index.js";
-import { finalizeAgentRegistrationOnchain, registerAgentOnchain, writeVerifiedAgentWallet } from "./contracts-service.js";
+import {
+  finalizeAgentRegistrationOnchain,
+  registerAgentOnchain,
+  transferAgentTokenOnchain,
+  writeVerifiedAgentWallet,
+} from "./contracts-service.js";
 import { buildAgentIdentityDocument, publishIdentityDocument } from "./ipfs-service.js";
 
 export async function registerAgent(input: Omit<AgentRegistration, "registeredAt">) {
@@ -36,7 +41,6 @@ export async function registerAgent(input: Omit<AgentRegistration, "registeredAt
 
     registrationFinalize = await finalizeAgentRegistrationOnchain(
       registrationStart.registryAgentId,
-      input.agentAddress as Address,
       input.agentUri ?? identityUpload.uri,
       input.metadata,
     );
@@ -69,6 +73,35 @@ export async function registerAgent(input: Omit<AgentRegistration, "registeredAt
     registration,
     onchain,
   };
+}
+
+export async function transferAgentTokenService(input: {
+  agentId: string;
+  registryAgentId: string;
+  agentAddress: Address;
+}) {
+  const ownershipTransfer = await transferAgentTokenOnchain(input.registryAgentId, input.agentAddress);
+  const repository = getMarketplaceRepository();
+  const existing = await repository.getAgent(input.agentId);
+
+  if (existing) {
+    await repository.saveAgent({
+      ...existing,
+      agentAddress: input.agentAddress,
+      registryAgentId: input.registryAgentId,
+    });
+  }
+
+  const result = {
+    agentId: input.agentId,
+    registryAgentId: input.registryAgentId,
+    agentAddress: input.agentAddress,
+    ownershipTransfer,
+  };
+
+  getBroker()?.broadcast("agent.token_transferred", result);
+
+  return result;
 }
 
 export async function setAgentWalletService(input: {

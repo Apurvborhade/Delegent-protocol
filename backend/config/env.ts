@@ -6,6 +6,11 @@ export const env = {
   proposalSubmissionPayTo: process.env.X402_PROPOSAL_PAY_TO,
   proposalSubmissionPriceUsd: process.env.X402_PROPOSAL_PRICE_USD ?? "$0.01",
   proposalSubmissionNetwork: resolveProposalNetwork(process.env.X402_PROPOSAL_NETWORK),
+  proposalSubmissionAsset: process.env.X402_PROPOSAL_ASSET,
+  proposalSubmissionAmountAtomic: process.env.X402_PROPOSAL_AMOUNT_ATOMIC,
+  proposalSubmissionAssetName: process.env.X402_PROPOSAL_ASSET_NAME,
+  proposalSubmissionAssetVersion: process.env.X402_PROPOSAL_ASSET_VERSION,
+  proposalSubmissionAssetTransferMethod: process.env.X402_PROPOSAL_ASSET_TRANSFER_METHOD,
   x402FacilitatorUrl: process.env.X402_FACILITATOR_URL,
   x402SyncOnStart: resolveBoolean(process.env.X402_SYNC_ON_START, false),
 };
@@ -13,8 +18,6 @@ export const env = {
 export function hasDatabaseUrl() {
   return Boolean(env.databaseUrl);
 }
-
-
 
 function resolveProposalNetwork(raw: string | undefined): `${string}:${string}` {
   const value = raw?.trim().toLowerCase();
@@ -26,8 +29,12 @@ function resolveProposalNetwork(raw: string | undefined): `${string}:${string}` 
     return "eip155:8453";
   }
 
-  if (value === "hela" || value === "hela-mainnet" || value === "666888" || value === "eip155:666888") {
+  if (value === "hela" || value === "hela-testnet" || value === "666888" || value === "eip155:666888") {
     return "eip155:666888";
+  }
+
+  if (value === "hela-mainnet" || value === "8668" || value === "eip155:8668") {
+    return "eip155:8668";
   }
 
   if (value.startsWith("eip155:")) {
@@ -52,4 +59,3 @@ function resolveBoolean(raw: string | undefined, fallback: boolean) {
 
   return fallback;
 }
-
