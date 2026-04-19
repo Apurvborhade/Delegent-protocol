@@ -32,7 +32,7 @@ export function Topbar({ variant = "vault" }: TopbarProps) {
   if (variant === "leaderboard") {
     return (
       <header className="flex justify-between items-center px-8 w-full h-16 bg-[#0D0E10] border-b border-[#1A1C1F] font-['Inter'] tabular-nums sticky top-0 z-40">
-        <div className="text-xl font-bold text-white">Propex</div>
+        <div className="text-xl font-bold text-white">AgentPit</div>
         <div className="flex items-center gap-4">
           <div onClick={connectWallet} className="flex items-center gap-2 bg-[#1F2022] px-3 py-1.5 rounded-full border border-outline-variant/15 text-sm text-[#A0A3A8] cursor-pointer hover:opacity-80 active:scale-95 transition-all">
             <span className="text-white font-medium">{displayAddress}</span>

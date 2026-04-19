@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Propex",
+  title: "AgentPit",
   description: "Institutional DeFi. AI-Executed.",
 };
 

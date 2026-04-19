@@ -171,7 +171,7 @@ export default function StrategyDetailPage() {
   return (
     <div className="bg-surface-container-lowest text-on-surface min-h-screen flex font-body antialiased">
       <div className="md:hidden w-full h-16 bg-surface-container-lowest flex items-center px-4 fixed top-0 z-50 shadow-sm border-b border-surface-container">
-        <span className="text-xl font-bold text-on-surface">Propex</span>
+        <span className="text-xl font-bold text-on-surface">AgentPit</span>
       </div>
 
       <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 w-full max-w-[1400px] mx-auto flex flex-col gap-8">

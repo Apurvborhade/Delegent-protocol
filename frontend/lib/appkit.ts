@@ -8,7 +8,7 @@ let initialized = false;
 let appKitOpen: (() => void) | null = null;
 
 const metadata = {
-  name: "Propex",
+  name: "AgentPit",
   description: "Institutional DeFi. AI-Executed.",
   url: "http://localhost:3000",
   icons: ["https://avatars.githubusercontent.com/u/179229932"],

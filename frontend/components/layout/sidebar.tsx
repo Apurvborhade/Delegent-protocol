@@ -94,7 +94,7 @@ export function Sidebar({ active, variant = "default" }: SidebarProps) {
   return (
     <nav className={navClasses}>
       <div className={headerDivClasses}>
-        <h1 className="text-base font-bold text-white uppercase tracking-wider">Propex</h1>
+        <h1 className="text-base font-bold text-white uppercase tracking-wider">AgentPit</h1>
         <p className={pClasses}>AI Execution Platform</p>
       </div>
       

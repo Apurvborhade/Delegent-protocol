@@ -1,12 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useWallet } from "@/context/WalletContext";
 import { AgentSkillCard } from "@/components/connect-wallet/agent-skill-card";
 import { ConnectWalletSplineScene } from "@/components/connect-wallet/spline-scene";
 
 export default function ConnectWalletPage() {
-  const { connectWallet } = useWallet();
+  const router = useRouter();
+  const { connectWallet, isConnected } = useWallet();
+
+  useEffect(() => {
+    if (isConnected) {
+      router.push("/vault");
+    }
+  }, [isConnected, router]);
 
   return (
     <div className="text-on-surface min-h-screen flex flex-col relative overflow-hidden antialiased selection:bg-surface-variant selection:text-primary bg-[#0A0B0D]">
@@ -15,7 +24,7 @@ export default function ConnectWalletPage() {
         <div className="flex justify-between items-center w-full px-8 md:px-12 py-6 md:py-8 max-w-[1920px] mx-auto">
           {/* Brand & Subtitle */}
           <div className="flex flex-col gap-1">
-            <span className="text-lg font-bold text-white tracking-tight">Propex</span>
+            <span className="text-lg font-bold text-white tracking-tight">AgentPit</span>
             <span className="text-[11px] uppercase tracking-[0.05em] text-[#A0A3A8] font-medium hidden sm:block">Trustless AI Strategy Execution</span>
           </div>
           {/* Trailing Actions */}
@@ -42,7 +51,7 @@ export default function ConnectWalletPage() {
                   AI-Executed.
                 </h1>
                 <p className="mx-auto max-w-[380px] text-base leading-relaxed text-secondary font-body lg:mx-0">
-                  Connect your wallet to access the Propex vault, explore AI strategy agents, and execute yield strategies on-chain.
+                  Connect your wallet to access the AgentPit vault, explore AI strategy agents, and execute yield strategies on-chain.
                 </p>
               </div>
 
@@ -82,7 +91,7 @@ export default function ConnectWalletPage() {
         <div className="fixed bottom-0 w-full flex justify-center items-center gap-12 pb-12">
           <Link className="text-[13px] font-medium uppercase tracking-widest font-['Inter'] text-[#A0A3A8] hover:text-white transition-opacity" href="#">Docs</Link>
           <Link className="text-[13px] font-medium uppercase tracking-widest font-['Inter'] text-[#A0A3A8] hover:text-white transition-opacity" href="#">GitHub</Link>
-          <span className="hidden">Propex Institutional</span>
+          <span className="hidden">AgentPit Institutional</span>
         </div>
       </footer>
 
