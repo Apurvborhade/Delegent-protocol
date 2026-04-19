@@ -15,7 +15,9 @@ export async function executeProposal(request: ExecutionRequest) {
   }
 
   const result = await relayProposalExecution(proposal);
-  await repository.markExecuted(proposal.id);
+  if (result.execution.status !== "failed") {
+    await repository.markExecuted(proposal.id);
+  }
 
   const response = {
     ...result.execution,
