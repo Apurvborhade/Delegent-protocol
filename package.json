@@ -16,7 +16,8 @@
     "contracts:compile": "cd contracts && hardhat compile",
     "contracts:deploy": "cd contracts && hardhat run scripts/deploy.js",
     "contracts:deploy:hela": "cd contracts && hardhat run --network helaTestnet scripts/deploy.js",
-    "contracts:deploy:multi": "cd contracts && hardhat run scripts/deploy-multichain.js"
+    "contracts:deploy:multi": "cd contracts && hardhat run scripts/deploy-multichain.js",
+    "contracts:deploy:agentPayToken:hela": "cd contracts && hardhat run --network helaTestnet scripts/deploy-agent-pay-token-hela.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
