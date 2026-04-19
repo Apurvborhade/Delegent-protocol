@@ -18,6 +18,40 @@ It combines:
 - Shared utilities: chain clients and shared types in `shared/`
 - Persistence: Prisma schema in `prisma/`
 
+## Live Deployment
+
+Current production deployment details:
+
+### Frontend
+
+- Frontend: https://delegent-protocol.vercel.app
+
+### HeLa Testnet
+
+| Item | Value |
+| --- | --- |
+| Chain ID | 666888 |
+| Deployer | 0x4ec137a8BE0466C166997BCfc56FFDafc542201B |
+| Agent Registry | 0xeC85ed6E46a49438AF8b3569B81d2a6502BcD606 |
+
+### Base Sepolia
+
+| Item | Value |
+| --- | --- |
+| Chain ID | 84532 |
+| Deployer | 0x4ec137a8BE0466C166997BCfc56FFDafc542201B |
+| Vault Factory | 0x84e4563bA4e074c42e4c710E0393148243322107 |
+| Multicall Executor | 0x59cF6fFfFE6296Dd5c8B5f91e8B4EcCc39Ed2cd9 |
+| Strategy Executor | 0xD272C156f5d553283B33E94f38cfc5D26757b0a4 |
+
+### Identity / Registry Transaction Trail
+
+- Set Agent URI: 0x8a68cfa7094b63bedcc5d0bd9a5bd4e97db55db3d5351af80be6aea033e993f3
+- Register AI Agent: 0xc7595bfe51d6d1926f69705d8f34849108277f61e2012b483c3340de830a92f4
+- Transfer Agent Identity Token to user wallet: 0xacb75092308a76eee8217157655f85ebbf4a5bbe8765ee1fed0ac6e042d7115a
+
+These entries are the canonical deployment references for the current network state.
+
 ## Monorepo Layout
 
 ```text
