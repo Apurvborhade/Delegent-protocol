@@ -70,8 +70,8 @@ export default function ConnectWalletPage() {
           </section>
 
           <section className="order-1 flex min-h-[320px] items-center justify-center sm:min-h-[380px] lg:order-2 lg:min-h-[640px]">
-            <div className="flex h-full w-full max-w-[760px] items-center justify-center">
-              <ConnectWalletSplineScene className="h-[320px] sm:h-[380px] md:h-[460px] lg:h-[560px] xl:h-[620px]" />
+            <div className="flex h-full w-full items-center justify-center">
+              <ConnectWalletSplineScene className="h-[560px] w-[560px] max-h-[70vh] max-w-full" />
             </div>
           </section>
         </div>

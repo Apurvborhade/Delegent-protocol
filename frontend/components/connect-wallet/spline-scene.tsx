@@ -20,9 +20,15 @@ type ConnectWalletSplineSceneProps = {
 export function ConnectWalletSplineScene({
   className = "",
 }: ConnectWalletSplineSceneProps) {
+  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   return (
     <div
-      className={`relative h-full min-h-[320px] w-full overflow-hidden bg-[#0A0B0D] ${className}`}
+      onWheelCapture={handleWheel}
+      className={`relative h-full min-h-[320px] w-full overflow-hidden bg-[#0A0B0D] [&_*]:bg-transparent [&_canvas]:!bg-[#0A0B0D] [&_div]:bg-transparent ${className}`}
     >
       <Spline
         scene="https://prod.spline.design/Gmmrw2nSQKfTGTSb/scene.splinecode"
