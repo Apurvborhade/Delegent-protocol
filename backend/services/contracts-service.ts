@@ -202,6 +202,17 @@ export async function materializeProposalCalls(proposal: StrategyProposal) {
 }
 
 export async function relayProposalExecution(proposal: StrategyProposal) {
+  if (isAddress(proposal.vault)) {
+    const expectedExecuter = getContractAddresses().strategyExecutor;
+    const currentExecuter = await getVaultExecuter(proposal.vault);
+
+    if (currentExecuter.toLowerCase() !== expectedExecuter.toLowerCase()) {
+      throw new Error(
+        `Vault executer mismatch for ${proposal.vault}: current ${currentExecuter}, expected ${expectedExecuter}.`,
+      );
+    }
+  }
+
   const materialized = await materializeProposalCalls(proposal);
   const execution = await executeStrategy({
     ...proposal,
